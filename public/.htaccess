@@ -1,0 +1,5 @@
+# Apache equivalent of vercel.json: /app client-side routes fall back to app/index.html
+RewriteEngine On
+RewriteCond %{REQUEST_FILENAME} !-f
+RewriteCond %{REQUEST_FILENAME} !-d
+RewriteRule ^app/ /app/index.html [L]
