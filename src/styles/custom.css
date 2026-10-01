@@ -1,0 +1,226 @@
+/* Page-level embeds that lived in Webflow custom-code blocks of the original site. */
+
+::-webkit-scrollbar {
+  width: 3px;
+  height: 3px;
+  border-left: 0;
+  background: rgba(0, 0, 0, 0.1);
+}
+::-webkit-scrollbar-track {
+  background: none;
+}
+::-webkit-scrollbar-thumb {
+  background: #151b31;
+  border-radius: 0;
+}
+
+/* typed.js cursor */
+.typed-words::after {
+  content: '|';
+  display: inline;
+  animation: blink 1s infinite;
+}
+@keyframes blink {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0;
+  }
+}
+
+.track-horizontal {
+  position: absolute;
+  white-space: nowrap;
+  will-change: transform;
+  animation: marquee-horizontal 25s linear infinite;
+}
+@keyframes marquee-horizontal {
+  from {
+    transform: translateX(0);
+  }
+  to {
+    transform: translateX(-50%);
+  }
+}
+.marquee-horizontal:hover .track-horizontal {
+  animation-play-state: paused;
+}
+
+.fs-cc-prefs_content {
+  -webkit-overflow-scrolling: touch;
+}
+
+/* Divs the original drove with IX2 click handlers are real buttons here. :where() keeps
+   this reset at zero specificity so the Webflow class rules still win. */
+:where(
+    button.notification-close-button,
+    button.fs-cc-banner_close,
+    button.fs-cc-prefs_close,
+    button.fs-cc-manager_button,
+    button.w-button
+  ) {
+  display: block;
+  padding: 0;
+  border: 0;
+  background-color: transparent;
+  font: inherit;
+  color: inherit;
+  text-align: inherit;
+  cursor: pointer;
+}
+.trackmanagementtablink,
+.downloadboximagewrap {
+  cursor: pointer;
+}
+
+:focus-visible {
+  outline: 2px solid #5b8def;
+  outline-offset: 2px;
+}
+
+.skip-link {
+  position: fixed;
+  top: 8px;
+  left: 8px;
+  z-index: 9999;
+  padding: 8px 16px;
+  border-radius: 8px;
+  background: #151b31;
+  color: #fff;
+  font-family: Inter, sans-serif;
+  translate: 0 -200%;
+}
+.skip-link:focus {
+  translate: 0 0;
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+/* "Persiapan kerja" preview video: framed inside the navy box with even padding, own controls. */
+.trackmanagementbox.preview-box {
+  padding: 48px;
+}
+.preview-frame {
+  position: relative;
+  aspect-ratio: 16 / 9;
+  overflow: hidden;
+  border-radius: 14px;
+  background: #0d1124;
+  box-shadow: 0 0 0 1px rgb(255 255 255 / 0.08), 0 28px 60px -24px rgb(0 0 0 / 0.7);
+}
+.preview-video {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  cursor: pointer;
+}
+.preview-controls {
+  position: absolute;
+  left: 16px;
+  bottom: 18px;
+  display: flex;
+  gap: 8px;
+}
+.preview-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  height: 44px;
+  padding: 0 16px 0 14px;
+  border: 0;
+  border-radius: 999px;
+  background: rgb(21 27 49 / 0.78);
+  -webkit-backdrop-filter: blur(8px);
+  backdrop-filter: blur(8px);
+  color: #fff;
+  font: 600 15px/1 Inter, sans-serif;
+  cursor: pointer;
+  transition: background-color 0.2s ease, transform 0.15s ease;
+}
+.preview-btn.icon {
+  justify-content: center;
+  width: 44px;
+  padding: 0;
+}
+.preview-btn svg {
+  width: 18px;
+  height: 18px;
+  flex-shrink: 0;
+}
+.preview-btn[aria-pressed='true'] svg {
+  color: #86e0c1;
+}
+.preview-btn:hover {
+  background: rgb(21 27 49 / 0.95);
+}
+.preview-btn:active {
+  transform: scale(0.96);
+}
+.preview-btn:focus-visible {
+  outline: 3px solid #86e0c1;
+  outline-offset: 2px;
+}
+.preview-progress {
+  position: absolute;
+  inset: auto 0 0 0;
+  height: 4px;
+  background: rgb(255 255 255 / 0.15);
+}
+.preview-progress div {
+  height: 100%;
+  background: #86e0c1;
+  transform-origin: left;
+  transition: transform 0.25s linear;
+}
+@media screen and (max-width: 991px) {
+  .trackmanagementbox.preview-box {
+    padding: 32px;
+  }
+}
+@media screen and (max-width: 767px) {
+  .trackmanagementbox.preview-box {
+    padding: 16px;
+  }
+  .preview-frame {
+    border-radius: 10px;
+  }
+  .preview-controls {
+    left: 10px;
+    bottom: 12px;
+  }
+  /* Icon-only on phones so the controls don't cover the video; the label stays for screen readers. */
+  .preview-btn {
+    justify-content: center;
+    width: 44px;
+    padding: 0;
+  }
+  .preview-btn-label {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .track-horizontal,
+  .typed-words::after {
+    animation: none;
+  }
+  .preview-progress div,
+  .preview-btn {
+    transition: none;
+  }
+}
