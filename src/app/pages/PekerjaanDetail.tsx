@@ -1,23 +1,18 @@
 import { useEffect, useState } from 'react'
 import { Link, useParams } from 'react-router'
-import { Bar, BarChart, XAxis, YAxis } from 'recharts'
 import { ArrowLeft, ArrowRight, Sparkles } from 'lucide-react'
 import { PostingItem, TargetButton, TrainingCard } from '@/app/components/cards'
 import { Score, ScoreBar, SkillBadge } from '@/app/components/common'
 import { Badge } from '@/app/components/ui/badge'
 import { Button } from '@/app/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/app/components/ui/card'
-import { ChartContainer, ChartLegend, ChartLegendContent, ChartTooltip, ChartTooltipContent, type ChartConfig } from '@/app/components/ui/chart'
 import { Skeleton } from '@/app/components/ui/skeleton'
 import { useCareer, useTypewriter } from '@/app/lib/hooks'
+import { cn } from '@/app/lib/utils'
 import { explainGap, POINTS, rankTrainings } from '@/app/lib/matching'
 import type { JobSkill, Skill } from '@/app/lib/types'
 import NotFound from './NotFound'
 
-const chartConfig = {
-  dimiliki: { label: 'Dimiliki', color: 'var(--chart-1)' },
-  kurang: { label: 'Belum dimiliki', color: '#f4a3a3' },
-} satisfies ChartConfig
 
 export default function PekerjaanDetail() {
   const { id } = useParams()
@@ -28,10 +23,21 @@ export default function PekerjaanDetail() {
   const count = (list: JobSkill[], tipe: JobSkill['tipe']) => list.filter((s) => s.tipe === tipe).length
   const own = { wajib: count(m.owned, 'wajib'), opsional: count(m.owned, 'opsional') }
   const all = { wajib: count(m.job.skills, 'wajib'), opsional: count(m.job.skills, 'opsional') }
-  const chartData = [
-    { tipe: 'Wajib', dimiliki: own.wajib * POINTS.wajib, kurang: (all.wajib - own.wajib) * POINTS.wajib },
-    { tipe: 'Tambahan', dimiliki: own.opsional * POINTS.opsional, kurang: (all.opsional - own.opsional) * POINTS.opsional },
-  ]
+  const ownedIds = new Set(m.owned.map((s) => s.skillId))
+  const rows = (['wajib', 'opsional'] as const).map((tipe) => ({
+    tipe,
+    label: tipe === 'wajib' ? 'Wajib' : 'Tambahan',
+    own: own[tipe],
+    earned: own[tipe] * POINTS[tipe],
+    total: all[tipe] * POINTS[tipe],
+    // owned first so the filled blocks read left to right
+    skills: m.job.skills
+      .filter((s) => s.tipe === tipe)
+      .map((s) => ({ ...s, have: ownedIds.has(s.skillId) }))
+      .sort((a, b) => Number(b.have) - Number(a.have)),
+  }))
+  // shared scale so 1 poin is the same width in both rows
+  const maxUnits = Math.max(1, ...rows.map((r) => r.total))
   const recs = rankTrainings(db.trainings, m.missingWajib.map((s) => s.skillId), m.missingOpsional.map((s) => s.skillId)).slice(0, 3)
   const jobPostings = postings.filter((p) => p.jobRoleId === m.job.id).slice(0, 5)
   const wajibGap = new Set(m.missingWajib.map((s) => s.skillId))
@@ -78,20 +84,52 @@ export default function PekerjaanDetail() {
 
         <Card>
           <CardHeader>
-            <CardTitle className="text-base">Perbandingan poin skill</CardTitle>
-            <CardDescription>Skill wajib bernilai 2 poin, skill tambahan 1 poin.</CardDescription>
+            <CardTitle className="text-base">Rincian poin skill</CardTitle>
+            <CardDescription>Tiap kotak = 1 skill. Skill wajib bernilai 2 poin, skill tambahan 1 poin.</CardDescription>
           </CardHeader>
-          <CardContent>
-            <ChartContainer config={chartConfig} className="aspect-auto h-[190px] w-full">
-              <BarChart data={chartData} layout="vertical" margin={{ left: 0, right: 8 }} barCategoryGap={18}>
-                <YAxis dataKey="tipe" type="category" width={72} tickLine={false} axisLine={false} />
-                <XAxis type="number" allowDecimals={false} tickLine={false} axisLine={false} />
-                <ChartTooltip cursor={{ fill: 'var(--muted)' }} content={<ChartTooltipContent formatter={(v, n) => `${chartConfig[n as keyof typeof chartConfig].label}: ${v} poin`} />} />
-                <ChartLegend content={<ChartLegendContent />} />
-                <Bar dataKey="dimiliki" stackId="a" fill="var(--color-dimiliki)" radius={[6, 0, 0, 6]} animationDuration={700} />
-                <Bar dataKey="kurang" stackId="a" fill="var(--color-kurang)" radius={[0, 6, 6, 0]} animationDuration={700} />
-              </BarChart>
-            </ChartContainer>
+          <CardContent className="grid gap-5">
+            {rows.map((r) => (
+              <div key={r.tipe}>
+                <div className="mb-2 flex items-baseline justify-between gap-3 text-sm">
+                  <span className="font-medium">
+                    {r.label} <span className="font-normal text-muted-foreground">· {POINTS[r.tipe]} poin per skill</span>
+                  </span>
+                  <span className="font-medium tabular-nums">
+                    {r.earned} / {r.total} poin
+                  </span>
+                </div>
+                {r.skills.length > 0 ? (
+                  <div className="grid gap-1" style={{ gridTemplateColumns: `repeat(${maxUnits}, minmax(0, 1fr))` }}>
+                    {r.skills.map((s) => (
+                      <div
+                        key={s.skillId}
+                        title={`${skillsById.get(s.skillId)?.nama ?? s.skillId}: ${s.have ? 'dimiliki' : 'belum dimiliki'}, ${POINTS[r.tipe]} poin`}
+                        className={cn('h-7 rounded-md', s.have ? 'bg-chart-1' : 'bg-[#f4a3a3]')}
+                        style={{ gridColumn: `span ${POINTS[r.tipe]}` }}
+                      />
+                    ))}
+                  </div>
+                ) : (
+                  <p className="text-[13px] text-muted-foreground">Tidak ada skill {r.label.toLowerCase()}.</p>
+                )}
+                <p className="mt-1.5 text-[13px] text-muted-foreground tabular-nums">
+                  {r.own} dari {r.skills.length} skill dimiliki × {POINTS[r.tipe]} poin = {r.earned} poin
+                </p>
+              </div>
+            ))}
+            <div className="flex flex-wrap items-center justify-between gap-3 border-t pt-4 text-sm">
+              <div className="flex gap-4 text-xs text-muted-foreground">
+                <span className="flex items-center gap-1.5">
+                  <span className="size-2.5 rounded-sm bg-chart-1" /> Dimiliki
+                </span>
+                <span className="flex items-center gap-1.5">
+                  <span className="size-2.5 rounded-sm bg-[#f4a3a3]" /> Belum dimiliki
+                </span>
+              </div>
+              <span className="font-medium tabular-nums">
+                Total {m.earned} / {m.total} poin
+              </span>
+            </div>
           </CardContent>
         </Card>
       </div>
