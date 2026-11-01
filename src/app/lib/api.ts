@@ -1,313 +1,199 @@
-// Fake backend. Every exported mutation is async and validates its input the way the real API must,
-// so pages already handle latency and errors. State lives in localStorage; swap these functions for
-// fetch() calls when the backend exists. Reads go through useDb()/useCurrentUser() (synchronous store).
 import { useSyncExternalStore } from 'react'
-import { SAMPLE_CV, seed } from '../data/seed.ts'
-import type { CvUpload, Db, Experience, Institution, JobPosting, JobRole, Skill, Training, User, UserSkill } from './types.ts'
-
-const DB_KEY = 'careerbridge:db:v1'
-const SESSION_KEY = 'careerbridge:session'
+import type { CvUpload, Db, Experience, Institution, JobRole, Skill, Training, User, UserSkill } from './types.ts'
+import type { JobMatch, RankedTraining } from './matching.ts'
+import { ApiError, request, watchJob, type UploadStatus } from './http.ts'
+export { ApiError } from './http.ts'
 export const MAX_CV_BYTES = 2 * 1024 * 1024
-
-export class ApiError extends Error {}
-
-function read<T>(key: string): T | null {
-  try {
-    const raw = localStorage.getItem(key)
-    return raw ? (JSON.parse(raw) as T) : null
-  } catch {
-    return null
-  }
-}
-
-/**
- * Postings stand in for the daily Jooble/JSearch fetch, so they are regenerated with today's dates on
- * every load; only the admin's "hidden" flags carry over (and postings of deleted jobs stay gone).
- */
-function load(): Db {
-  const stored = read<Db>(DB_KEY)
-  if (!stored) return seed()
-  const hidden = new Set(stored.postings.filter((p) => p.hidden).map((p) => p.id))
-  const jobs = new Set(stored.jobs.map((j) => j.id))
-  const postings = seed().postings.filter((p) => jobs.has(p.jobRoleId)).map((p) => ({ ...p, hidden: hidden.has(p.id) }))
-  return { ...stored, postings }
-}
-
-let db: Db = load()
-let session: string | null = read<string>(SESSION_KEY)
-const listeners = new Set<() => void>()
-
-function emit() {
-  for (const l of listeners) l()
-}
-
-function persist() {
-  try {
-    localStorage.setItem(DB_KEY, JSON.stringify(db))
-    if (session) localStorage.setItem(SESSION_KEY, JSON.stringify(session))
-    else localStorage.removeItem(SESSION_KEY)
-  } catch {
-    // Storage full or blocked: the demo keeps working in memory for this tab.
-  }
-}
-
-function commit(next: Partial<Db>) {
-  db = { ...db, ...next }
-  persist()
-  emit()
-}
-
-// Another tab logged out or edited data: follow it.
-if (typeof window !== 'undefined')
-  window.addEventListener('storage', (e) => {
-    if (e.key !== DB_KEY && e.key !== SESSION_KEY) return
-    db = load()
-    session = read<string>(SESSION_KEY)
-    emit()
-  })
-
-const subscribe = (l: () => void) => {
-  listeners.add(l)
-  return () => void listeners.delete(l)
-}
-
-export function useDb(): Db {
-  return useSyncExternalStore(subscribe, () => db)
-}
-
-export function useCurrentUser(): User | null {
-  const data = useDb()
-  const id = useSyncExternalStore(subscribe, () => session)
-  return data.users.find((u) => u.id === id) ?? null
-}
-
-/** Network-ish latency so loading states are real. */
-const wait = (ms = 350 + Math.random() * 300) => new Promise((r) => setTimeout(r, ms))
-
-const newId = (prefix: string) => `${prefix}-${crypto.randomUUID().slice(0, 8)}`
-
-export async function hashPassword(password: string): Promise<string> {
-  const bytes = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(password))
-  return [...new Uint8Array(bytes)].map((b) => b.toString(16).padStart(2, '0')).join('')
-}
-
-function me(): User {
-  const u = db.users.find((x) => x.id === session)
-  if (!u) throw new ApiError('Sesi berakhir. Silakan masuk lagi.')
-  return u
-}
-
-function updateMe(patch: Partial<User>) {
-  const id = me().id
-  commit({ users: db.users.map((u) => (u.id === id ? { ...u, ...patch } : u)) })
-}
-
-function requireAdmin() {
-  if (me().role !== 'admin') throw new ApiError('Hanya admin yang bisa mengubah data ini.')
-}
-
-// ---------- Auth and profile (F1) ----------
-
 export const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
-
-export async function login(email: string, password: string): Promise<User> {
-  await wait()
-  const u = db.users.find((x) => x.email === email.trim().toLowerCase())
-  if (!u || u.passwordHash !== (await hashPassword(password))) throw new ApiError('Email atau password salah.')
-  session = u.id
-  persist()
-  emit()
-  return u
-}
-
-export function logout() {
-  session = null
-  persist()
-  emit()
-}
-
-export type RegisterInput = Pick<User, 'nama' | 'email' | 'pendidikan' | 'jurusan' | 'provinsi' | 'kota'> & {
-  password: string
-  consent: boolean
-}
-
-export async function register(input: RegisterInput): Promise<User> {
-  await wait()
-  const email = input.email.trim().toLowerCase()
-  if (!input.nama.trim()) throw new ApiError('Nama wajib diisi.')
-  if (!EMAIL_RE.test(email)) throw new ApiError('Format email tidak valid.')
-  if (input.password.length < 8) throw new ApiError('Password minimal 8 karakter.')
-  if (!input.pendidikan || !input.provinsi || !input.kota.trim()) throw new ApiError('Lengkapi data profil.')
-  if (!input.consent) throw new ApiError('Persetujuan pemrosesan CV wajib dicentang.')
-  if (db.users.some((u) => u.email === email)) throw new ApiError('Email ini sudah terdaftar. Silakan masuk.')
-  const user: User = {
-    id: newId('u'),
-    nama: input.nama.trim(),
-    email,
-    passwordHash: await hashPassword(input.password),
-    pendidikan: input.pendidikan,
-    jurusan: input.jurusan.trim(),
-    provinsi: input.provinsi,
-    kota: input.kota.trim(),
-    role: 'user',
-    createdAt: new Date().toISOString(),
-    skills: [],
-    targetJobId: null,
-    cv: null,
-  }
-  session = user.id
-  commit({ users: [...db.users, user] })
-  return user
-}
-
-export async function updateProfile(patch: Pick<User, 'nama' | 'pendidikan' | 'jurusan' | 'provinsi' | 'kota'>) {
-  await wait()
-  if (!patch.nama.trim() || !patch.kota.trim()) throw new ApiError('Nama dan kota wajib diisi.')
-  updateMe({ ...patch, nama: patch.nama.trim(), jurusan: patch.jurusan.trim(), kota: patch.kota.trim() })
-}
-
-export async function changePassword(current: string, next: string) {
-  await wait()
-  if ((await hashPassword(current)) !== me().passwordHash) throw new ApiError('Password lama salah.')
-  if (next.length < 8) throw new ApiError('Password baru minimal 8 karakter.')
-  updateMe({ passwordHash: await hashPassword(next) })
-}
-
-// ---------- CV and skills (F2) ----------
-
-export type ParsedCv = { pendidikan: string[]; pengalaman: Experience[]; skills: string[] }
-
 export const CV_STEPS = ['Mengunggah file', 'Mengambil teks dari PDF', 'AI memisahkan pendidikan, pengalaman, dan skill', 'Menyamakan nama skill dengan kamus'] as const
+// Remove tokens left by the previous browser SDK during migration to HttpOnly sessions.
+try {
+  for (const key of Object.keys(localStorage)) {
+    if (/^sb-[a-z0-9]+-auth-token(?:-.*)?$/.test(key)) localStorage.removeItem(key)
+  }
+} catch { /* Browser storage can be unavailable; cookie authentication still works. */ }
+const base = (import.meta.env.VITE_API_URL ?? '/api/v1').replace(/\/$/, '')
+const empty = (): Db => ({ users: [], skills: [], jobs: [], institutions: [], trainings: [], postings: [] })
+let db = empty()
+let current: User | null = null
+let ranked: JobMatch[] = []
+let status = { loading: true, error: '' }
+let generation = 0
+let inFlight: Promise<void> | null = null
+const listeners = new Set<() => void>()
+const emit = () => listeners.forEach((l) => l())
+const subscribe = (l: () => void) => { listeners.add(l); return () => { listeners.delete(l) } }
+export function useDb(): Db { return useSyncExternalStore(subscribe, () => db) }
+export function useCurrentUser(): User | null { return useSyncExternalStore(subscribe, () => current) }
+export function useApiStatus() { return useSyncExternalStore(subscribe, () => status) }
+export function useMatches() { return useSyncExternalStore(subscribe, () => ranked) }
+async function api<T>(path: string, init: RequestInit = {}): Promise<T> {
+  const started = generation
+  try { return await request<T>(base, path, init) }
+  catch (e) {
+    if (e instanceof ApiError && e.status === 401 && started === generation) { current = null; db = empty(); ranked = [];  emit() }
+    throw e
+  }
+}
+export type PageResult<T> = {items: T[]; total: number; offset: number; limit: number; skills?: Skill[]; institutions?: Institution[]; fields?: string[]}
+export type BrowseParams = Record<string, string | number | boolean | undefined>
+export function queryString(query: BrowseParams): string {
+  const params = new URLSearchParams()
+  for (const [key,value] of Object.entries(query)) if (value !== undefined && value !== '') params.set(key,String(value))
+  return params.toString()
+}
+function merge<T extends {id: string}>(old: T[], items: T[]): T[] {
+  return [...new Map([...old,...items].map((item) => [item.id,item])).values()].slice(-400)
+}
+function metadata(value: {skills?: Skill[]; institutions?: Institution[]}) {
+  db = {...db, skills: merge(db.skills,value.skills ?? []), institutions: merge(db.institutions,value.institutions ?? [])}; emit()
+}
+export async function fetchCatalog<T>(kind: string, query: BrowseParams, signal?: AbortSignal): Promise<PageResult<T>> {
+  const page = await api<PageResult<T>>(`/catalog/${kind}?${queryString(query)}`, {signal})
+  if (!signal?.aborted) {
+    metadata(page)
+    if (kind === 'skills') metadata({skills: page.items as Skill[]})
+  }
+  return page
+}
+export async function fetchMatchesPage(query: BrowseParams, signal?: AbortSignal): Promise<PageResult<JobMatch>> {
+  const page = await api<PageResult<JobMatch>>(`/me/matches?${queryString(query)}`,{signal})
+  if (!signal?.aborted) metadata(page)
+  return page
+}
+export async function fetchTrainingPage(query: BrowseParams, signal?: AbortSignal): Promise<PageResult<Training>> {
+  const page = await api<PageResult<Training>>(`/me/trainings?${queryString(query)}`,{signal})
+  if (!signal?.aborted) metadata(page)
+  return page
+}
+export async function fetchSkillsByIds(ids: string[], signal?: AbortSignal) {
+  if (ids.length) await fetchCatalog<Skill>('skills',{ids:[...new Set(ids)].slice(0,100).join(','),limit:100},signal)
+}
+let freeTrainingCount = 0
+export function useFreeTrainingCount() { return useSyncExternalStore(subscribe, () => freeTrainingCount) }
+export async function loadDashboard(signal?: AbortSignal) {
+  const epoch = generation
+  const result = await api<PageResult<JobMatch> & {freeTrainingCount: number}>('/me/summary',{signal})
+  if (signal?.aborted || epoch !== generation || !current) return
+  ranked = result.items; freeTrainingCount = result.freeTrainingCount
+  db = {...db,jobs:result.items.map((m) => m.job)}; metadata(result)
+  return result
+}
+async function fetchState() {
+  const mine = ++generation
+  try {
+    let user: User
+    try { user = await api<User>('/me') }
+    catch (e) {
+      if (!(e instanceof ApiError)) throw e
+      if (e.status === 401) {
+        if (mine === generation) { current = null; db = empty(); ranked = []; status = {loading: false, error: ''}; emit() }
+        return
+      }
+      if (e.status !== 404) throw e
+      // Existing profiles need no extra provider /user roundtrip on each login.
+      const active = await api<{user: {user_metadata: Record<string, unknown>}}>('/auth/session')
+      const { nama, pendidikan, jurusan, provinsi, kota, consent } = active.user.user_metadata
+      if (!consent || !nama || !pendidikan || !provinsi || !kota) throw new ApiError('Data pendaftaran belum lengkap. Hubungi pengelola.')
+      user = await api<User>('/me', {method: 'POST', body: JSON.stringify({nama, pendidikan, jurusan: jurusan ?? '', provinsi, kota, consent: true})})
+    }
+    if (mine !== generation) return
+    current = user; db = {...db, users: [user]}
+    status = {loading: false, error: ''}; emit()
+  } catch (e) {
+    if (mine === generation) { status = { loading: false, error: e instanceof Error ? e.message : 'Data gagal dimuat.' }; emit() }
+    throw e
+  }
+}
+export function refresh(): Promise<void> {
+  if (inFlight) return inFlight
+  const pending = fetchState().finally(() => { if (inFlight === pending) inFlight = null })
+  inFlight = pending
+  return pending
+}
+void refresh().catch(() => {})
 
-/** Checks what the server must check too: PDF by signature (not just extension) and ≤ 2 MB. */
+export type RegisterInput = Pick<User, 'nama' | 'email' | 'pendidikan' | 'jurusan' | 'provinsi' | 'kota'> & { password: string; consent: boolean }
+export async function register(input: RegisterInput): Promise<User | null> {
+  if (!input.consent) throw new ApiError('Persetujuan pemrosesan CV wajib dicentang.')
+  const { email, password, ...profile } = input
+  const result = await api<{authenticated: boolean}>('/auth/register', {method: 'POST', body: JSON.stringify({email: email.trim().toLowerCase(), password, profile})})
+  if (!result.authenticated) return null
+  inFlight = null; await refresh(); return current
+}
+export async function login(email: string, password: string): Promise<User> {
+  await api('/auth/login', {method: 'POST', body: JSON.stringify({email: email.trim().toLowerCase(), password})})
+  inFlight = null; await refresh()
+  if (!current) throw new ApiError('Profil gagal dimuat. Coba lagi.')
+  return current
+}
+export async function verifyEmail(email: string, token: string) {
+  await api('/auth/verify', {method: 'POST', body: JSON.stringify({email, token})})
+  inFlight = null; await refresh()
+}
+export async function logout() {
+  await api('/auth/logout', {method: 'POST'})
+  ++generation; inFlight = null; current = null; db = empty(); ranked = []; status = { loading: false, error: '' }; emit()
+}
+export async function updateProfile(patch: Pick<User, 'nama' | 'pendidikan' | 'jurusan' | 'provinsi' | 'kota'>) {
+  await api('/me', { method: 'PATCH', body: JSON.stringify(patch) }); await refresh()
+}
+export async function changePassword(currentPassword: string, password: string) {
+  await api('/auth/password', {method: 'POST', body: JSON.stringify({currentPassword, password})})
+  ++generation; inFlight = null; current = null; db = empty(); ranked = []; status = { loading: false, error: '' }; emit()
+}
+export type ParsedCv = { pendidikan: string[]; pengalaman: Experience[]; skills: string[]; cvId?: string; matched?: {skillId: string; sumber: UserSkill['sumber']; raw: string}[]; unknown?: string[] }
 export async function validateCv(file: File): Promise<string | null> {
-  if (!/\.pdf$/i.test(file.name) && file.type !== 'application/pdf') return 'File harus berformat PDF.'
   if (file.size > MAX_CV_BYTES) return 'Ukuran file maksimal 2 MB.'
   if (file.size === 0) return 'File kosong.'
-  const head = new TextDecoder().decode(await file.slice(0, 5).arrayBuffer())
-  if (head !== '%PDF-') return 'Isi file bukan PDF yang valid.'
+  if (new TextDecoder().decode(await file.slice(0, 5).arrayBuffer()) !== '%PDF-') return 'Isi file bukan PDF yang valid.'
   return null
 }
-
-/** Demo stand-in for text extraction + AI parsing: always returns the sample CV's result. */
-export async function parseCv(file: File, onStep: (i: number) => void): Promise<ParsedCv> {
-  const problem = await validateCv(file)
-  if (problem) throw new ApiError(problem)
-  for (let i = 0; i < CV_STEPS.length; i++) {
-    onStep(i)
-    await wait(600 + Math.random() * 500)
+let reviewCvId: string | undefined
+export type CvJob = UploadStatus<ParsedCv | null> & {fileName:string;size:number;durationMs:number|null;reviewed:boolean}
+export async function latestCv(signal?:AbortSignal):Promise<CvJob|null>{return api('/me/cv/latest',{signal})}
+export async function dismissCv(id:string){await api(`/me/cv/${id}/dismiss`,{method:'POST'})}
+export async function queueCv(file:File):Promise<{id:string}>{
+  const problem=await validateCv(file);if(problem)throw new ApiError(problem)
+  const form=new FormData();form.append('file',file)
+  return api('/me/cv',{method:'POST',body:form})
+}
+async function watchAuthenticated<T>(path:string,onProgress:(value:T)=>void,signal?:AbortSignal):Promise<T>{
+  const started=generation
+  try{return await watchJob<T>(base,path,onProgress,signal)}
+  catch(error){
+    if(error instanceof ApiError && error.status===401 && started===generation){current=null;db=empty();ranked=[];emit()}
+    throw error
   }
-  return { pendidikan: SAMPLE_CV.pendidikan, pengalaman: SAMPLE_CV.pengalaman, skills: SAMPLE_CV.skills }
 }
-
-/** Saves the confirmed skill list; pass `cv` to attach the parsed CV, omit to keep the current one. */
+export async function watchCv(id:string,onStep:(step:number)=>void,signal?:AbortSignal):Promise<CvJob>{
+  return watchAuthenticated<CvJob>(`/me/cv/${id}/events`,(job)=>onStep(Math.min(job.step,3)),signal)
+}
+export function cvResult(job:CvJob):ParsedCv {
+  if(!job.parsed)throw new ApiError('Hasil CV belum tersedia.')
+  reviewCvId=job.id
+  return {...job.parsed,cvId:job.id,matched:(job.normalized?.matched ?? []) as ParsedCv['matched'],unknown:job.normalized?.unknown ?? []}
+}
+export async function parseCv(file:File,onStep:(step:number)=>void,signal?:AbortSignal):Promise<ParsedCv>{
+  onStep(0);const uploaded=await queueCv(file)
+  return cvResult(await watchCv(uploaded.id,onStep,signal))
+}
 export async function saveSkills(skills: UserSkill[], cv?: CvUpload) {
-  await wait()
-  const known = new Set(db.skills.map((s) => s.id))
-  const unique = [...new Map(skills.filter((s) => known.has(s.skillId)).map((s) => [s.skillId, s])).values()]
-  updateMe(cv ? { skills: unique, cv } : { skills: unique })
+  await api('/me/skills', { method: 'PUT', body: JSON.stringify({ skills, cvId: cv?.id ?? (cv ? reviewCvId : undefined) }) }); await refresh()
+}
+export async function deleteCv() { await api('/me/cv', { method: 'DELETE' }); await refresh() }
+export async function setTarget(occupationId: string | null) { await api('/me/target', { method: 'PUT', body: JSON.stringify({ occupationId }) }); await refresh() }
+export type Analysis = { skills?: Skill[]; institutions?: Institution[]; relatedOccupations?: JobRole[]; relatedTrainings?: Training[]; match: JobMatch; trainings: RankedTraining[]; relatedOccupationIds: string[]; relatedTrainingIds: string[]; explanation: string; prioritySkillIds: string[]; fallback: boolean; model: string; revision: string }
+export async function loadAnalysis(id: string, signal?: AbortSignal,onProgress?:(step:number)=>void): Promise<Analysis> {
+  const job=await api<{id:string}>(`/me/analysis/${id}/jobs`,{method:'POST',signal})
+  const terminal=await watchAuthenticated<{result:Analysis;step:number}>(`/me/analysis-jobs/${job.id}/events`,(value)=>onProgress?.(value.step),signal)
+  const result=terminal.result
+  if (!signal?.aborted) { db = {...db,jobs:merge(db.jobs,result.relatedOccupations ?? [])}; metadata(result) }
+  return result
 }
 
-export async function deleteCv() {
-  await wait()
-  updateMe({ cv: null })
-}
-
-export async function setTarget(jobId: string | null) {
-  if (jobId && !db.jobs.some((j) => j.id === jobId)) throw new ApiError('Pekerjaan tidak ditemukan.')
-  updateMe({ targetJobId: jobId })
-}
-
-export function resetDemo() {
-  db = seed()
-  if (!db.users.some((u) => u.id === session)) session = null
-  persist()
-  emit()
-}
-
-// ---------- Admin (F7) ----------
-
-const upsert = <T extends { id: string }>(list: T[], item: T) =>
-  list.some((x) => x.id === item.id) ? list.map((x) => (x.id === item.id ? item : x)) : [...list, item]
-
-export async function saveSkill(skill: Omit<Skill, 'id'> & { id?: string }) {
-  await wait()
-  requireAdmin()
-  commit({ skills: upsert(db.skills, { ...skill, id: skill.id ?? newId('sk') }) })
-}
-
-/** Removing a skill also removes it from jobs, trainings and users, so no dangling ids remain. */
-export async function deleteSkill(id: string) {
-  await wait()
-  requireAdmin()
-  commit({
-    skills: db.skills.filter((s) => s.id !== id),
-    jobs: db.jobs.map((j) => ({ ...j, skills: j.skills.filter((s) => s.skillId !== id) })),
-    trainings: db.trainings.map((t) => ({ ...t, skillIds: t.skillIds.filter((s) => s !== id) })),
-    users: db.users.map((u) => ({ ...u, skills: u.skills.filter((s) => s.skillId !== id) })),
-  })
-}
-
-export async function saveJob(job: Omit<JobRole, 'id'> & { id?: string }) {
-  await wait()
-  requireAdmin()
-  if (!job.skills.some((s) => s.tipe === 'wajib')) throw new ApiError('Pekerjaan butuh minimal satu skill wajib.')
-  commit({ jobs: upsert(db.jobs, { ...job, id: job.id ?? newId('job') }) })
-}
-
-export async function deleteJob(id: string) {
-  await wait()
-  requireAdmin()
-  commit({
-    jobs: db.jobs.filter((j) => j.id !== id),
-    postings: db.postings.filter((p) => p.jobRoleId !== id),
-    users: db.users.map((u) => (u.targetJobId === id ? { ...u, targetJobId: null } : u)),
-  })
-}
-
-export async function saveInstitution(inst: Omit<Institution, 'id'> & { id?: string }) {
-  await wait()
-  requireAdmin()
-  commit({ institutions: upsert(db.institutions, { ...inst, id: inst.id ?? newId('lpk') }) })
-}
-
-export async function deleteInstitution(id: string) {
-  await wait()
-  requireAdmin()
-  commit({
-    institutions: db.institutions.filter((i) => i.id !== id),
-    trainings: db.trainings.filter((t) => t.institutionId !== id),
-  })
-}
-
-export async function saveTraining(t: Omit<Training, 'id'> & { id?: string }) {
-  await wait()
-  requireAdmin()
-  if (t.skillIds.length === 0) throw new ApiError('Pilih minimal satu skill yang diajarkan.')
-  commit({ trainings: upsert(db.trainings, { ...t, id: t.id ?? newId('tr') }) })
-}
-
-export async function deleteTraining(id: string) {
-  await wait()
-  requireAdmin()
-  commit({ trainings: db.trainings.filter((t) => t.id !== id) })
-}
-
-export async function setPostingHidden(id: string, hidden: boolean) {
-  requireAdmin()
-  commit({ postings: db.postings.map((p: JobPosting) => (p.id === id ? { ...p, hidden } : p)) })
-}
-
-/** CSV import: rows already validated and resolved to full records by the admin page. */
-export async function importRows<K extends 'skills' | 'jobs' | 'institutions' | 'trainings'>(
-  collection: K,
-  rows: Db[K],
-) {
-  await wait()
-  requireAdmin()
-  let list = db[collection] as { id: string }[]
-  for (const r of rows as { id: string }[]) list = upsert(list, r)
-  commit({ [collection]: list } as Partial<Db>)
-}
-
-export { newId }
+// Admin UI sources remain for the later milestone, but are not routed or enabled.
+const unavailable = async (..._args: unknown[]): Promise<never> => { throw new ApiError('Fitur admin belum tersedia.') }
+export const saveSkill = unavailable, deleteSkill = unavailable, saveJob = unavailable, deleteJob = unavailable
+export const saveInstitution = unavailable, deleteInstitution = unavailable, saveTraining = unavailable, deleteTraining = unavailable, setPostingHidden = unavailable, importRows = unavailable
+export const newId = (prefix: string) => `${prefix}-${crypto.randomUUID()}`

@@ -125,7 +125,7 @@ export function rankTrainings(
       (a, b) =>
         b.coversWajib.length - a.coversWajib.length ||
         b.coversWajib.length + b.coversOpsional.length - (a.coversWajib.length + a.coversOpsional.length) ||
-        Number(a.training.biaya > 0) - Number(b.training.biaya > 0) ||
+        Number(a.training.biaya !== 0) - Number(b.training.biaya !== 0) ||
         a.training.nama.localeCompare(b.training.nama, 'id'),
     )
 }
@@ -139,8 +139,8 @@ export type TrainingFilter = {
 
 /** Online (daring) programs pass any province filter: they can be joined from anywhere. */
 export function matchesFilter(t: Training, inst: Institution | undefined, f: TrainingFilter): boolean {
-  if (f.biaya === 'gratis' && t.biaya > 0) return false
-  if (f.biaya === 'berbayar' && t.biaya === 0) return false
+  if (f.biaya === 'gratis' && t.biaya !== 0) return false
+  if (f.biaya === 'berbayar' && (t.biaya === null || t.biaya <= 0)) return false
   if (f.moda !== 'semua' && t.moda !== f.moda) return false
   if (f.provinsi && t.moda === 'luring' && inst?.provinsi !== f.provinsi) return false
   return true

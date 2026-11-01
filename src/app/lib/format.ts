@@ -2,7 +2,7 @@ const rupiahFmt = new Intl.NumberFormat('id-ID', { style: 'currency', currency: 
 const relFmt = new Intl.RelativeTimeFormat('id', { numeric: 'auto' })
 const dateFmt = new Intl.DateTimeFormat('id-ID', { day: 'numeric', month: 'short', year: 'numeric' })
 
-export const rupiah = (n: number) => (n === 0 ? 'Gratis' : rupiahFmt.format(n))
+export const rupiah = (n: number | null) => (n === null ? 'Biaya belum diketahui' : n === 0 ? 'Gratis' : rupiahFmt.format(n))
 
 export const fileSize = (bytes: number) =>
   bytes >= 1024 * 1024

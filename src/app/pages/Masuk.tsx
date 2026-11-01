@@ -8,10 +8,6 @@ import { Button } from '@/app/components/ui/button'
 import { Input } from '@/app/components/ui/input'
 import { ApiError, EMAIL_RE, login } from '@/app/lib/api'
 
-const DEMO = [
-  { label: 'Pencari kerja', email: 'demo@careerbridge.id' },
-  { label: 'Admin', email: 'admin@careerbridge.id' },
-]
 
 export default function Masuk() {
   const navigate = useNavigate()
@@ -31,8 +27,8 @@ export default function Masuk() {
     if (next.email || next.password) return
     setPending(true)
     try {
-      const user = await login(email, password)
-      navigate(from ?? (user.role === 'admin' ? '/admin/skill' : '/'), { replace: true })
+      await login(email, password)
+      navigate(from?.startsWith('/') && !from.startsWith('//') ? from : '/', { replace: true })
     } catch (err) {
       setErrors({ form: err instanceof ApiError ? err.message : 'Terjadi kesalahan. Coba lagi.' })
       setPending(false)
@@ -85,30 +81,6 @@ export default function Masuk() {
           {pending ? 'Memeriksa…' : 'Masuk'}
         </Button>
       </form>
-
-      <div className="mt-6 rounded-xl border border-dashed bg-muted/60 p-4">
-        <p className="text-[13px] text-muted-foreground">
-          Akun demo, password <span className="font-medium text-foreground">demo1234</span>
-        </p>
-        <div className="mt-2.5 flex gap-2">
-          {DEMO.map((d) => (
-            <Button
-              key={d.email}
-              type="button"
-              variant="outline"
-              size="sm"
-              className="flex-1 bg-card"
-              onClick={() => {
-                setEmail(d.email)
-                setPassword('demo1234')
-                setErrors({})
-              }}
-            >
-              {d.label}
-            </Button>
-          ))}
-        </div>
-      </div>
 
       <p className="mt-8 text-center text-sm text-muted-foreground">
         Belum punya akun?{' '}

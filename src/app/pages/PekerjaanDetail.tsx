@@ -7,17 +7,21 @@ import { Badge } from '@/app/components/ui/badge'
 import { Button } from '@/app/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/app/components/ui/card'
 import { Skeleton } from '@/app/components/ui/skeleton'
-import { useCareer, useTypewriter } from '@/app/lib/hooks'
+import { useCareer, useTypewriter, useAnalysis, useJob } from '@/app/lib/hooks'
 import { cn } from '@/app/lib/utils'
-import { explainGap, POINTS, rankTrainings } from '@/app/lib/matching'
+import { POINTS } from '@/app/lib/matching'
 import type { JobSkill, Skill } from '@/app/lib/types'
 import NotFound from './NotFound'
 
 
 export default function PekerjaanDetail() {
   const { id } = useParams()
-  const { ranked, user, skillsById, demand, db, instById, postings } = useCareer()
-  const m = ranked.find((x) => x.job.id === id)
+  const { user, skillsById, db, instById, postings } = useCareer()
+  const detail = useJob(id)
+  const m = detail.data?.items[0]
+  const analysis = useAnalysis(id)
+  if (detail.loading) return <p role="status">Memuat pekerjaan...</p>
+  if (detail.error) return <p role="alert">{detail.error} <button onClick={detail.retry}>Coba lagi</button></p>
   if (!m) return <NotFound />
 
   const count = (list: JobSkill[], tipe: JobSkill['tipe']) => list.filter((s) => s.tipe === tipe).length
@@ -38,11 +42,11 @@ export default function PekerjaanDetail() {
   }))
   // shared scale so 1 poin is the same width in both rows
   const maxUnits = Math.max(1, ...rows.map((r) => r.total))
-  const recs = rankTrainings(db.trainings, m.missingWajib.map((s) => s.skillId), m.missingOpsional.map((s) => s.skillId)).slice(0, 3)
+  const recs = (analysis.data?.trainings ?? []).slice(0, 3)
   const jobPostings = postings.filter((p) => p.jobRoleId === m.job.id).slice(0, 5)
   const wajibGap = new Set(m.missingWajib.map((s) => s.skillId))
   const opsGap = new Set(m.missingOpsional.map((s) => s.skillId))
-  const explanation = explainGap(m, skillsById, demand, db.trainings)
+  const explanation = analysis.data?.explanation ?? ''
 
   return (
     <>
@@ -140,7 +144,10 @@ export default function PekerjaanDetail() {
         <SkillColumn title="Tambahan, belum dimiliki" list={m.missingOpsional} tone="opsional" skillsById={skillsById} empty="Lengkap." />
       </div>
 
-      <AiExplanation key={explanation} text={explanation} />
+      {analysis.loading && <p role="status" className="mt-4">{analysis.progress===0 ? 'Menunggu antrean analisis...' : 'AI sedang menyusun analisis...'}</p>}
+      {analysis.error && <p role="alert">{analysis.error} <button onClick={analysis.retry} className="underline">Coba lagi</button></p>}
+      {analysis.data && <AiExplanation key={explanation} text={explanation} />}
+      {!!analysis.data?.relatedOccupationIds.length && <section className="mt-4"><h2 className="font-medium">Pekerjaan serupa yang mungkin cocok</h2><ul>{analysis.data.relatedOccupationIds.map((jobId) => <li key={jobId}><Link className="underline" to={`/pekerjaan/${jobId}`}>{db.jobs.find((j) => j.id === jobId)?.nama}</Link></li>)}</ul></section>}
 
       {recs.length > 0 && (
         <section className="mt-8">
@@ -159,6 +166,12 @@ export default function PekerjaanDetail() {
           </div>
         </section>
       )}
+
+      {!!analysis.data?.relatedTrainings?.length && <section className="mt-8">
+        <h2 className="mb-3 font-display text-lg">Pelatihan terkait lainnya</h2>
+        <p className="mb-3 text-sm text-muted-foreground">Periksa silabus untuk memastikan skill yang diajarkan sesuai kebutuhanmu.</p>
+        <div className="grid gap-3 lg:grid-cols-3">{analysis.data.relatedTrainings.map((training)=><TrainingCard key={training.id} training={training} inst={instById.get(training.institutionId)} skillsById={skillsById} wajibGap={wajibGap} opsionalGap={opsGap}/>)}</div>
+      </section>}
 
       <section className="mt-8">
         <h2 className="mb-3 font-display text-lg">Contoh lowongan</h2>
@@ -249,7 +262,7 @@ function AiExplanation({ text }: { text: string }) {
             {!done && <span className="ml-0.5 inline-block h-4 w-1.5 translate-y-0.5 animate-pulse rounded-sm bg-foreground/60" />}
           </p>
         )}
-        <p className="mt-4 text-xs text-muted-foreground">Mode demo: teks disusun otomatis dari hasil hitungan, belum memanggil DeepSeek.</p>
+        <p className="mt-4 text-xs text-muted-foreground">Nama skill dan skor diverifikasi oleh server. Penjelasan cadangan digunakan jika AI tidak tersedia.</p>
       </CardContent>
     </Card>
   )

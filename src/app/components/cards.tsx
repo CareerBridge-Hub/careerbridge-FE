@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import { toast } from 'sonner'
 import { Clock, ExternalLink, MapPin, Monitor, Star, Users } from 'lucide-react'
 import { Badge } from '@/app/components/ui/badge'
@@ -31,8 +32,9 @@ export function TrainingCard({
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
           <h3 className="font-semibold leading-snug">{t.nama}</h3>
+          {t.sample && <Badge variant="outline">Data contoh</Badge>}
           <p className="mt-0.5 flex flex-wrap items-center gap-x-2 text-[13px] text-muted-foreground">
-            {inst?.nama ?? 'Lembaga dihapus'}
+            {inst?.nama ?? 'Informasi lembaga belum tersedia'}
             {inst && (
               <Badge variant="outline" className="h-5 px-1.5 text-[11px] font-medium">
                 {inst.jenis}
@@ -62,7 +64,7 @@ export function TrainingCard({
         <ul className="flex flex-wrap gap-x-4 gap-y-1 text-[13px] text-muted-foreground">
           <li className="flex items-center gap-1.5">
             {t.moda === 'daring' ? <Monitor className="size-3.5" /> : <Users className="size-3.5" />}
-            {t.moda === 'daring' ? 'Daring' : 'Tatap muka'}
+            {t.moda === null ? 'Cara belajar belum diketahui' : t.moda === 'daring' ? 'Daring' : 'Tatap muka'}
           </li>
           <li className="flex items-center gap-1.5">
             <MapPin className="size-3.5" />
@@ -70,7 +72,7 @@ export function TrainingCard({
           </li>
           <li className="flex items-center gap-1.5">
             <Clock className="size-3.5" />
-            {t.durasi}
+            {t.durasi || 'Durasi belum diketahui'}
           </li>
         </ul>
         <Button asChild size="sm" variant="outline">
@@ -118,16 +120,22 @@ export function PostingItem({ posting: p, jobName, score }: { posting: JobPostin
 }
 
 export function TargetButton({ jobId, jobName, isTarget, className }: { jobId: string; jobName: string; isTarget: boolean; className?: string }) {
+  const [pending, setPending] = useState(false)
   return (
     <Button
+      disabled={pending}
       type="button"
       size="sm"
       variant={isTarget ? 'default' : 'outline'}
       aria-pressed={isTarget}
       className={cn('relative z-10', className)}
       onClick={async () => {
-        await setTarget(isTarget ? null : jobId)
-        toast.success(isTarget ? 'Incaran dilepas' : `${jobName} jadi pekerjaan incaranmu`)
+        setPending(true)
+        try {
+          await setTarget(isTarget ? null : jobId)
+          toast.success(isTarget ? 'Incaran dilepas' : `${jobName} jadi pekerjaan incaranmu`)
+        } catch (error) { toast.error(error instanceof Error ? error.message : 'Gagal menyimpan incaran.') }
+        finally { setPending(false) }
       }}
     >
       <Star className={cn(isTarget && 'fill-mint text-mint')} />

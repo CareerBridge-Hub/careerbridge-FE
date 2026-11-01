@@ -2,7 +2,7 @@ import { lazy, Suspense, type ReactNode } from 'react'
 import { Navigate, Route, Routes, useLocation } from 'react-router'
 import { AppLayout } from './components/AppLayout'
 import { Skeleton } from './components/ui/skeleton'
-import { useCurrentUser } from './lib/api'
+import { useCurrentUser, useApiStatus, refresh, logout } from './lib/api'
 import Daftar from './pages/Daftar'
 import Masuk from './pages/Masuk'
 
@@ -14,10 +14,6 @@ const PekerjaanDetail = lazy(() => import('./pages/PekerjaanDetail'))
 const Pelatihan = lazy(() => import('./pages/Pelatihan'))
 const Lowongan = lazy(() => import('./pages/Lowongan'))
 const Profil = lazy(() => import('./pages/Profil'))
-const AdminSkill = lazy(() => import('./pages/admin/AdminSkill'))
-const AdminPekerjaan = lazy(() => import('./pages/admin/AdminPekerjaan'))
-const AdminPelatihan = lazy(() => import('./pages/admin/AdminPelatihan'))
-const AdminLowongan = lazy(() => import('./pages/admin/AdminLowongan'))
 const NotFound = lazy(() => import('./pages/NotFound'))
 
 function PageSkeleton() {
@@ -37,15 +33,20 @@ function PageSkeleton() {
 
 function RequireAuth({ role, children }: { role?: 'user' | 'admin'; children: ReactNode }) {
   const user = useCurrentUser()
+  const state = useApiStatus()
   const location = useLocation()
+  if (state.loading) return <PageSkeleton />
+  if (state.error) return <div role="alert" className="p-8">{state.error}<button className="ml-4 underline" onClick={() => void refresh().catch(() => {})}>Coba lagi</button><button className="ml-4 underline" onClick={() => void logout().catch(() => {})}>Masuk ulang</button></div>
   if (!user) return <Navigate to="/masuk" replace state={{ from: location.pathname + location.search }} />
-  if (role && user.role !== role) return <Navigate to={user.role === 'admin' ? '/admin/skill' : '/'} replace />
+  if (role && user.role !== role) return <div role="alert" className="p-8">Fitur admin belum tersedia pada tahap ini. <button className="underline" onClick={() => void logout().catch(() => {})}>Keluar</button></div>
   return children
 }
 
 function GuestOnly({ children }: { children: ReactNode }) {
   const user = useCurrentUser()
-  if (user) return <Navigate to={user.role === 'admin' ? '/admin/skill' : '/'} replace />
+  const state = useApiStatus()
+  if (state.loading) return <PageSkeleton />
+  if (user) return <Navigate to={'/'} replace />
   return children
 }
 
@@ -66,11 +67,6 @@ export function AppRoutes() {
         <Route path="lowongan" element={<RequireAuth role="user">{page(<Lowongan />)}</RequireAuth>} />
         <Route path="profil" element={page(<Profil />)} />
 
-        <Route path="admin" element={<Navigate to="/admin/skill" replace />} />
-        <Route path="admin/skill" element={<RequireAuth role="admin">{page(<AdminSkill />)}</RequireAuth>} />
-        <Route path="admin/pekerjaan" element={<RequireAuth role="admin">{page(<AdminPekerjaan />)}</RequireAuth>} />
-        <Route path="admin/pelatihan" element={<RequireAuth role="admin">{page(<AdminPelatihan />)}</RequireAuth>} />
-        <Route path="admin/lowongan" element={<RequireAuth role="admin">{page(<AdminLowongan />)}</RequireAuth>} />
 
         <Route path="*" element={page(<NotFound />)} />
       </Route>

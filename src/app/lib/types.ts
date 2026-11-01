@@ -30,12 +30,13 @@ export type Institution = {
 export type Moda = 'daring' | 'luring'
 
 export type Training = {
+  sample?: boolean
   id: string
   institutionId: string
   nama: string
   /** Rupiah; 0 means free. */
-  biaya: number
-  moda: Moda
+  biaya: number | null
+  moda: Moda | null
   durasi: string
   urlDaftar: string
   skillIds: string[]
@@ -54,11 +55,12 @@ export type JobPosting = {
   hidden: boolean
 }
 
-export type UserSkill = { skillId: string; sumber: 'cv' | 'manual' }
+export type UserSkill = { skillId: string; sumber: 'cv' | 'cv_alias' | 'cv_semantik' | 'manual' }
 
 export type Experience = { posisi: string; tempat: string; periode: string }
 
 export type CvUpload = {
+  id?: string
   fileName: string
   size: number
   uploadedAt: string
@@ -70,7 +72,6 @@ export type User = {
   id: string
   nama: string
   email: string
-  passwordHash: string
   pendidikan: string
   jurusan: string
   provinsi: string

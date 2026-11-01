@@ -315,7 +315,7 @@ export function seed(now = new Date()): Db {
   }))
 
   const rinaSkills = ['ms-excel', 'komunikasi', 'administrasi-perkantoran', 'mesin-produksi', 'quality-control', 'gambar-teknik', 'prinsip-5s', 'kerja-tim', 'lean-manufacturing', 'pencatatan-produksi', 'perawatan-mesin']
-  const users: User[] = [
+  const users: (User & { passwordHash: string })[] = [
     {
       id: 'u-demo',
       nama: 'Rina Putri',

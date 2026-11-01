@@ -9,14 +9,14 @@ import { Checkbox } from '@/app/components/ui/checkbox'
 import { Input } from '@/app/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/app/components/ui/select'
 import { EDUCATION, PROVINCES } from '@/app/data/seed'
-import { ApiError, EMAIL_RE, register } from '@/app/lib/api'
+import { ApiError, EMAIL_RE, register, verifyEmail } from '@/app/lib/api'
 import { cn, invalid } from '@/app/lib/utils'
 
 type Errors = Partial<Record<'nama' | 'email' | 'password' | 'pendidikan' | 'jurusan' | 'provinsi' | 'kota' | 'consent' | 'form', string>>
 
-/** 0–3: length ≥ 8, mixes letters and digits, has a symbol or both cases. */
+/** 0–3: length ≥ 12, mixes letters and digits, has a symbol or both cases. */
 function strength(pw: string) {
-  if (pw.length < 8) return 0
+  if (pw.length < 12) return 0
   return 1 + Number(/[a-z]/i.test(pw) && /\d/.test(pw)) + Number(/[^a-z0-9]/i.test(pw) || (/[a-z]/.test(pw) && /[A-Z]/.test(pw)))
 }
 const STRENGTH = ['Terlalu pendek', 'Cukup', 'Bagus', 'Kuat']
@@ -25,6 +25,8 @@ export default function Daftar() {
   const navigate = useNavigate()
   const [step, setStep] = useState<1 | 2>(1)
   const [f, setF] = useState({ nama: '', email: '', password: '', pendidikan: '', jurusan: '', provinsi: '', kota: '', consent: false })
+  const [confirm, setConfirm] = useState(false)
+  const [code, setCode] = useState('')
   const [show, setShow] = useState(false)
   const [errors, setErrors] = useState<Errors>({})
   const [pending, setPending] = useState(false)
@@ -39,7 +41,7 @@ export default function Daftar() {
     const next: Errors = {}
     if (!f.nama.trim()) next.nama = 'Nama wajib diisi.'
     if (!EMAIL_RE.test(f.email.trim())) next.email = 'Masukkan email yang valid.'
-    if (f.password.length < 8) next.password = 'Password minimal 8 karakter.'
+    if (f.password.length < 12) next.password = 'Password minimal 12 karakter.'
     setErrors(next)
     if (Object.keys(next).length === 0) setStep(2)
   }
@@ -56,7 +58,8 @@ export default function Daftar() {
     if (Object.keys(next).length > 0) return
     setPending(true)
     try {
-      await register(f)
+      const user = await register(f)
+      if (!user) { setConfirm(true); setPending(false); return }
       toast.success('Akun berhasil dibuat', { description: 'Langkah pertama: upload CV atau pilih skill-mu.' })
       navigate('/cv', { replace: true })
     } catch (err) {
@@ -69,6 +72,22 @@ export default function Daftar() {
       setPending(false)
     }
   }
+
+  if (confirm) return <AuthLayout>
+    <h1 className="font-display text-[32px]">Konfirmasi email</h1>
+    <p className="mt-2">Masukkan kode konfirmasi yang dikirim ke {f.email}.</p>
+    <form className="mt-6 grid gap-4" onSubmit={async (e) => {
+      e.preventDefault(); setPending(true); setErrors({})
+      try { await verifyEmail(f.email, code); navigate('/cv', {replace: true}) }
+      catch (err) { setErrors({form: err instanceof Error ? err.message : 'Konfirmasi gagal.'}) }
+      finally { setPending(false) }
+    }}>
+      <Field label="Kode konfirmasi" htmlFor="confirmation-code"><Input id="confirmation-code" autoComplete="one-time-code" inputMode="numeric" maxLength={10} value={code} onChange={(e) => setCode(e.target.value)} /></Field>
+      <FormError>{errors.form}</FormError>
+      <Button disabled={pending || code.length < 6} type="submit">Konfirmasi</Button>
+      <Link to="/masuk">Kembali ke halaman masuk</Link>
+    </form>
+  </AuthLayout>
 
   return (
     <AuthLayout>

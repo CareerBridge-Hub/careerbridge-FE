@@ -1,5 +1,4 @@
-import { useMemo, useState } from 'react'
-import { Link } from 'react-router'
+import { Link, useSearchParams } from 'react-router'
 import { ArrowRight, Search } from 'lucide-react'
 import { TargetButton } from '@/app/components/cards'
 import { EmptyState, PageHeader, ScoreBar } from '@/app/components/common'
@@ -7,18 +6,23 @@ import { Badge } from '@/app/components/ui/badge'
 import { Button } from '@/app/components/ui/button'
 import { Input } from '@/app/components/ui/input'
 import { ToggleGroup, ToggleGroupItem } from '@/app/components/ui/toggle-group'
-import { useCareer } from '@/app/lib/hooks'
-import { normalizeKey } from '@/app/lib/matching'
+import { PageControls } from '@/app/components/PageControls'
+import { fetchMatchesPage } from '@/app/lib/api'
+import { useCareer, useServerPage, useUrlSearch } from '@/app/lib/hooks'
 import { cn } from '@/app/lib/utils'
 
 export default function Pekerjaan() {
-  const { ranked, user } = useCareer()
-  const [q, setQ] = useState('')
-  const [bidang, setBidang] = useState('semua')
-  const fields = useMemo(() => [...new Set(ranked.map((m) => m.job.bidang))].sort(), [ranked])
-  const shown = ranked.filter(
-    (m) => (bidang === 'semua' || m.job.bidang === bidang) && normalizeKey(`${m.job.nama} ${m.job.bidang}`).includes(normalizeKey(q)),
-  )
+  const { user } = useCareer()
+  const [params,setParams] = useSearchParams()
+  const [q,setQ]=useUrlSearch()
+  const search=params.get('q') ?? ''
+  const bidang=params.get('category') ?? 'semua'
+  const offset=Math.max(0,Number(params.get('offset')) || 0)
+  const limit=6
+  const result=useServerPage(fetchMatchesPage,{offset,limit,q:search,category:bidang==='semua'?'':bidang},q===search)
+  const fields=result.data?.fields ?? []
+  const shown=result.data?.items ?? []
+  const change=(key:string,value:string)=>setParams((p)=>{if(value)p.set(key,value);else p.delete(key);p.delete('offset');return p})
 
   return (
     <>
@@ -41,12 +45,12 @@ export default function Pekerjaan() {
       <div className="mb-5 flex flex-col gap-3 md:flex-row md:items-center">
         <div className="relative md:w-72">
           <Search className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground" />
-          <Input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Cari pekerjaan" className="h-10 bg-card pl-9" aria-label="Cari pekerjaan" />
+          <Input maxLength={120} value={q} onChange={(e) => setQ(e.target.value)} placeholder="Cari pekerjaan" className="h-10 bg-card pl-9" aria-label="Cari pekerjaan" />
         </div>
         <ToggleGroup
           type="single"
           value={bidang}
-          onValueChange={(v) => v && setBidang(v)}
+          onValueChange={(v) => v && change('category',v)}
           variant="outline"
           className="flex-wrap bg-card"
           aria-label="Filter bidang"
@@ -62,7 +66,7 @@ export default function Pekerjaan() {
         </ToggleGroup>
       </div>
 
-      {shown.length === 0 ? (
+      {result.loading ? <p role="status">Memuat pekerjaan...</p> : result.error ? <p role="alert">{result.error} <button onClick={result.retry}>Coba lagi</button></p> : shown.length === 0 ? (
         <EmptyState title="Tidak ada pekerjaan yang cocok dengan pencarian" />
       ) : (
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
@@ -109,6 +113,7 @@ export default function Pekerjaan() {
           })}
         </div>
       )}
+      <PageControls offset={offset} limit={limit} total={result.data?.total ?? 0} disabled={result.loading} onChange={(n)=>setParams((p)=>{p.set('offset',String(n));return p})}/>
     </>
   )
 }

@@ -6,14 +6,20 @@ import { EmptyState, PageHeader, Score, ScoreBar, SkillBadge, Stat } from '@/app
 import { Button } from '@/app/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/app/components/ui/card'
 import { ChartContainer, ChartTooltip, ChartTooltipContent, type ChartConfig } from '@/app/components/ui/chart'
-import { useCareer } from '@/app/lib/hooks'
+import { useFreeTrainingCount } from '@/app/lib/api'
+import { useCareer, useDashboard } from '@/app/lib/hooks'
 
 const chartConfig = { score: { label: 'Skor', color: 'var(--chart-1)' } } satisfies ChartConfig
 const toneFill = (s: number) => (s >= 70 ? 'var(--chart-1)' : s >= 40 ? 'var(--chart-5)' : 'var(--chart-4)')
 
 export default function Beranda() {
-  const { user, ranked, target, focus, skillsById, postings, db } = useCareer()
+  const { user, ranked, target, focus, skillsById, postings } = useCareer()
+  const dashboard = useDashboard()
+  const freeForFocus = useFreeTrainingCount()
   const firstName = user.nama.split(' ')[0]
+
+  if (dashboard.loading) return <p role="status">Memuat ringkasan...</p>
+  if (dashboard.error) return <p role="alert">{dashboard.error} <button onClick={dashboard.retry}>Coba lagi</button></p>
 
   if (user.skills.length === 0)
     return (
@@ -50,9 +56,6 @@ export default function Beranda() {
     )
 
   const best = ranked[0]
-  const freeForFocus = focus
-    ? db.trainings.filter((t) => t.biaya === 0 && t.skillIds.some((id) => focus.missingWajib.some((m) => m.skillId === id) || focus.missingOpsional.some((m) => m.skillId === id))).length
-    : 0
   const chartData = ranked.slice(0, 6).map((m) => ({ id: m.job.id, nama: m.job.nama, score: m.score }))
   const focusPostings = postings.filter((p) => p.jobRoleId === focus?.job.id).slice(0, 3)
 

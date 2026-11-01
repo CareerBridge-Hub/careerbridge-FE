@@ -1,4 +1,4 @@
-import { useMemo, useState, type DragEvent } from 'react'
+import { useEffect, useMemo, useState, useRef, type DragEvent } from 'react'
 import { Link, useNavigate } from 'react-router'
 import { toast } from 'sonner'
 import { ArrowRight, Check, FileText, Loader2, RefreshCw, Sparkles, Trash2, Upload, X } from 'lucide-react'
@@ -18,15 +18,15 @@ import {
 import { Button } from '@/app/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/app/components/ui/card'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/app/components/ui/dialog'
-import { ApiError, CV_STEPS, deleteCv, parseCv, saveSkills, validateCv, type ParsedCv } from '@/app/lib/api'
+import { ApiError, CV_STEPS, fetchSkillsByIds, deleteCv, queueCv, watchCv, latestCv, dismissCv, cvResult, type CvJob, saveSkills, validateCv, type ParsedCv } from '@/app/lib/api'
 import { fileSize, formatDate } from '@/app/lib/format'
 import { useCareer } from '@/app/lib/hooks'
-import { normalizeKey, normalizeSkills } from '@/app/lib/matching'
+import { normalizeKey } from '@/app/lib/matching'
 import type { Skill, UserSkill } from '@/app/lib/types'
 import { cn } from '@/app/lib/utils'
 
 type Review = {
-  file: File
+  file: {name:string;size:number}
   parsed: ParsedCv
   seconds: number
   /** skill id → raw text the AI produced for it */
@@ -37,34 +37,64 @@ type Review = {
 export default function Cv() {
   const { user, db, skillsById } = useCareer()
   const navigate = useNavigate()
+  const ownIds=user.skills.map((s)=>s.skillId).join(',')
+  useEffect(()=>{const controller=new AbortController();void fetchSkillsByIds(ownIds.split(',').filter(Boolean),controller.signal).catch((e)=>{if(!controller.signal.aborted)toast.error(e.message)});return()=>controller.abort()},[ownIds])
   const [processing, setProcessing] = useState<{ step: number; fileName: string } | null>(null)
   const [review, setReview] = useState<Review | null>(null)
   const [replacing, setReplacing] = useState(false)
 
-  async function handleFile(file: File) {
-    const problem = await validateCv(file)
-    if (problem) {
-      toast.error(problem, { description: file.name })
-      return
-    }
-    const started = performance.now()
-    setProcessing({ step: 0, fileName: file.name })
-    try {
-      const parsed = await parseCv(file, (step) => setProcessing({ step, fileName: file.name }))
-      const { matched, unknown } = normalizeSkills(parsed.skills, db.skills)
-      setReview({
-        file,
-        parsed,
-        seconds: (performance.now() - started) / 1000,
-        skills: new Map(matched.map((m) => [m.skillId, m.raw])),
-        unknown,
-      })
-    } catch (err) {
-      toast.error(err instanceof ApiError ? err.message : 'CV gagal dibaca. Coba lagi.')
-    } finally {
-      setProcessing(null)
-      setReplacing(false)
-    }
+  const [checking,setChecking]=useState(true)
+  const [failure,setFailure]=useState<{id?:string;message:string;terminal?:boolean}|null>(null)
+  const connection=useRef<AbortController|null>(null)
+  async function follow(id:string,signal:AbortSignal,file?:{name:string;size:number},existing?:CvJob){
+    const job=existing?.status==='selesai'?existing:await watchCv(id,(step)=>{if(!signal.aborted)setProcessing({step,fileName:file?.name ?? existing?.fileName ?? 'CV'})},signal)
+    if(signal.aborted)return
+    const parsed=cvResult(job)
+    await fetchSkillsByIds((parsed.matched ?? []).map((m)=>m.skillId),signal)
+    if(signal.aborted)return
+    setReview({file:file ?? {name:job.fileName,size:job.size},parsed,seconds:(job.durationMs ?? 0)/1000,
+      skills:new Map((parsed.matched ?? []).map((m)=>[m.skillId,m.raw])),unknown:parsed.unknown ?? []})
+  }
+  useEffect(()=>{
+    const controller=new AbortController();connection.current=controller
+    void (async()=>{
+      let id:string|undefined
+      try{
+        const job=await latestCv(controller.signal)
+        if(controller.signal.aborted)return
+        setChecking(false)
+        if(!job || job.reviewed)return
+        id=job.id
+        if(job.status==='gagal'){setFailure({id,message:job.error ?? 'CV gagal diproses.',terminal:true});return}
+        setProcessing({step:job.step,fileName:job.fileName})
+        await follow(job.id,controller.signal,undefined,job)
+      }catch(error){if(!controller.signal.aborted)setFailure({id,message:error instanceof Error?error.message:'Proses tidak dapat dimuat.',terminal:error instanceof ApiError && error.code==='job_failed' && error.status===0})}
+      finally{if(!controller.signal.aborted){setChecking(false);setProcessing(null)}}
+    })()
+    return()=>controller.abort()
+  },[user.id])
+  async function handleFile(file:File){
+    const problem=await validateCv(file)
+    if(problem){toast.error(problem,{description:file.name});return}
+    connection.current?.abort()
+    const controller=new AbortController();connection.current=controller
+    setFailure(null);setProcessing({step:-1,fileName:file.name})
+    let id:string|undefined
+    try{
+      const uploaded=await queueCv(file);id=uploaded.id
+      if(controller.signal.aborted)return
+      await follow(id,controller.signal,file)
+    }catch(error){if(!controller.signal.aborted)setFailure({id,message:error instanceof Error?error.message:'CV gagal dibaca.',terminal:error instanceof ApiError && error.code==='job_failed' && error.status===0})}
+    finally{if(!controller.signal.aborted){setProcessing(null);setReplacing(false)}}
+  }
+  async function reconnect(){
+    if(!failure?.id){location.reload();return}
+    const id=failure.id
+    connection.current?.abort();const controller=new AbortController();connection.current=controller
+    setFailure(null);setProcessing({step:0,fileName:'CV'})
+    try{await follow(id,controller.signal)}
+    catch(error){if(!controller.signal.aborted)setFailure({id,message:error instanceof Error?error.message:'Koneksi terputus.',terminal:error instanceof ApiError && error.code==='job_failed' && error.status===0})}
+    finally{if(!controller.signal.aborted)setProcessing(null)}
   }
 
   return (
@@ -74,12 +104,19 @@ export default function Cv() {
         description="Upload CV dalam PDF, AI memisahkan pendidikan, pengalaman, dan skill. Kamu bisa membetulkan hasilnya sebelum disimpan."
       />
 
-      {processing ? (
+      {failure && <div role="alert" className="mb-4 rounded-xl border p-4 text-sm">{failure.message}
+        {!failure.terminal && <Button variant="outline" className="ml-3" onClick={()=>void reconnect()}>Sambung lagi</Button>}
+        {failure.id && failure.terminal && <Button variant="ghost" onClick={()=>void dismissCv(failure.id!).then(()=>setFailure(null)).catch((e)=>toast.error(e.message))}>Abaikan hasil</Button>}
+      </div>}
+      {checking ? <p role="status">Memeriksa proses CV sebelumnya...</p> : processing ? (
         <ProcessingCard step={processing.step} fileName={processing.fileName} />
       ) : review ? (
         <ReviewCard
           review={review}
-          setReview={setReview}
+          setReview={(next)=>{
+            if(next===null && review.parsed.cvId)void dismissCv(review.parsed.cvId).then(()=>setReview(null)).catch((e)=>toast.error(e.message))
+            else setReview(next)
+          }}
           skills={db.skills}
           skillsById={skillsById}
           manual={user.skills.filter((s) => s.sumber === 'manual')}
@@ -180,14 +217,15 @@ function Dropzone({ onFile }: { onFile: (f: File) => void }) {
 }
 
 function ProcessingCard({ step, fileName }: { step: number; fileName: string }) {
-  const pct = ((step + 0.5) / CV_STEPS.length) * 100
+  const visible=Math.max(0,step)
+  const pct = step===0?25:((visible+0.5)/CV_STEPS.length)*100
   return (
     <Card className="mx-auto max-w-xl">
       <CardHeader>
         <CardTitle className="flex items-center gap-2 text-base">
-          <Loader2 className="size-4 animate-spin" /> Membaca {fileName}
+          <Loader2 className="size-4 animate-spin" /> {step<0?'Mengunggah':'Membaca'} {fileName}
         </CardTitle>
-        <CardDescription>Biasanya selesai kurang dari 30 detik.</CardDescription>
+        <CardDescription>{step<0 ? 'Tunggu sampai unggahan selesai sebelum menutup halaman.' : step===0 ? 'File diterima dan menunggu antrean server. Kamu bisa kembali nanti untuk melihat hasilnya.' : 'Proses berjalan di server. Kamu bisa meninggalkan halaman ini dan kembali untuk melihat hasilnya.'}</CardDescription>
       </CardHeader>
       <CardContent>
         <div className="h-1.5 overflow-hidden rounded-full bg-secondary">
@@ -195,15 +233,15 @@ function ProcessingCard({ step, fileName }: { step: number; fileName: string }) 
         </div>
         <ol className="mt-5 grid gap-3" aria-live="polite">
           {CV_STEPS.map((label, i) => (
-            <li key={label} className={cn('flex items-center gap-3 text-sm transition-opacity', i > step && 'opacity-45')}>
+            <li key={label} className={cn('flex items-center gap-3 text-sm transition-opacity', (i > visible || (step===0 && i>0)) && 'opacity-45')}>
               <span
                 className={cn(
                   'grid size-6 shrink-0 place-items-center rounded-full border',
-                  i < step && 'border-mint bg-mint text-primary',
-                  i === step && 'border-primary',
+                  (i < visible || (step===0 && i===0)) && 'border-mint bg-mint text-primary',
+                  step!==0 && i===visible && 'border-primary',
                 )}
               >
-                {i < step ? <Check className="size-3.5" /> : i === step ? <Loader2 className="size-3.5 animate-spin" /> : null}
+                {i<visible || (step===0 && i===0) ? <Check className="size-3.5" /> : step!==0 && i===visible ? <Loader2 className="size-3.5 animate-spin" /> : null}
               </span>
               {label}
             </li>
@@ -264,8 +302,9 @@ function ReviewCard({
   async function save() {
     setSaving(true)
     try {
-      const fromCv: UserSkill[] = [...review.skills.keys()].map((skillId) => ({ skillId, sumber: 'cv' }))
+      const fromCv: UserSkill[] = [...review.skills.keys()].map((skillId) => ({ skillId, sumber: review.parsed.matched?.find((m) => m.skillId === skillId)?.sumber ?? 'manual' }))
       await saveSkills([...fromCv, ...manual.filter((m) => !review.skills.has(m.skillId))], {
+        id: review.parsed.cvId,
         fileName: review.file.name,
         size: review.file.size,
         uploadedAt: new Date().toISOString(),
@@ -288,7 +327,7 @@ function ReviewCard({
         <CardDescription>
           {review.file.name} dibaca dalam {review.seconds.toLocaleString('id-ID', { maximumFractionDigits: 1 })} detik. Hapus skill yang salah,
           tambahkan yang terlewat, lalu simpan.
-          <span className="mt-1 block text-xs">Mode demo: hasil bacaan memakai contoh CV, bukan isi file-mu.</span>
+
         </CardDescription>
       </CardHeader>
       <CardContent className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.3fr)]">
@@ -526,8 +565,9 @@ function SkillBrowser({ skills, selected, onToggle }: { skills: Skill[]; selecte
 
 function DeleteCvButton() {
   const [pending, setPending] = useState(false)
+  const [open, setOpen] = useState(false)
   return (
-    <AlertDialog>
+    <AlertDialog open={open} onOpenChange={setOpen}>
       <AlertDialogTrigger asChild>
         <Button variant="ghost" className="text-destructive hover:bg-danger-soft hover:text-destructive">
           <Trash2 /> Hapus CV
@@ -548,8 +588,7 @@ function DeleteCvButton() {
             onClick={async (e) => {
               e.preventDefault()
               setPending(true)
-              await deleteCv()
-              toast.success('CV dihapus')
+              try { await deleteCv(); setOpen(false); toast.success('CV dihapus') } catch (error) { toast.error(error instanceof Error ? error.message : 'Gagal menghapus CV.') } finally { setPending(false) }
             }}
           >
             {pending && <Loader2 className="animate-spin" />}

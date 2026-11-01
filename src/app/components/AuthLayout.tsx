@@ -12,7 +12,7 @@ export function AuthLayout({ children }: { children: ReactNode }) {
           <div className="w-full max-w-[400px] animate-page-in">{children}</div>
         </div>
         <p className="text-center text-xs text-muted-foreground lg:text-left">
-          Mode demo: semua data masih contoh dan tersimpan di browser ini.
+          CV diproses secara privat. Data pelatihan contoh ditandai pada katalog.
         </p>
       </div>
 

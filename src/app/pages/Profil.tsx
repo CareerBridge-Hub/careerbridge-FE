@@ -147,7 +147,7 @@ function PasswordForm() {
     e.preventDefault()
     const next: typeof errors = {}
     if (!f.lama) next.lama = 'Isi password lama.'
-    if (f.baru.length < 8) next.baru = 'Minimal 8 karakter.'
+    if (f.baru.length < 12) next.baru = 'Minimal 12 karakter.'
     else if (f.baru === f.lama) next.baru = 'Password baru harus berbeda.'
     if (f.ulang !== f.baru) next.ulang = 'Tidak sama dengan password baru.'
     setErrors(next)

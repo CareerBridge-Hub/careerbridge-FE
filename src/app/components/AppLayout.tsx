@@ -1,6 +1,6 @@
+import { toast } from 'sonner'
 import { useEffect } from 'react'
 import { Link, NavLink, Outlet, useLocation, useNavigate } from 'react-router'
-import { toast } from 'sonner'
 import {
   BriefcaseBusiness,
   ChevronsUpDown,
@@ -8,12 +8,7 @@ import {
   GraduationCap,
   LayoutDashboard,
   LogOut,
-  Newspaper,
-  RotateCcw,
-  School,
-  Tags,
   UserRound,
-  Rss,
   type LucideIcon,
 } from 'lucide-react'
 import { Avatar, AvatarFallback } from '@/app/components/ui/avatar'
@@ -43,7 +38,7 @@ import {
   SidebarTrigger,
   useSidebar,
 } from '@/app/components/ui/sidebar'
-import { logout, resetDemo, useCurrentUser } from '@/app/lib/api'
+import { logout, useCurrentUser } from '@/app/lib/api'
 import { initials } from '@/app/lib/format'
 import { Logo } from './common'
 
@@ -54,15 +49,8 @@ const USER_NAV: NavItem[] = [
   { to: '/cv', label: 'CV & Skill', icon: FileText },
   { to: '/pekerjaan', label: 'Pekerjaan', icon: BriefcaseBusiness },
   { to: '/pelatihan', label: 'Pelatihan', icon: GraduationCap },
-  { to: '/lowongan', label: 'Lowongan', icon: Newspaper },
 ]
 
-const ADMIN_NAV: NavItem[] = [
-  { to: '/admin/skill', label: 'Kamus skill', icon: Tags },
-  { to: '/admin/pekerjaan', label: 'Pekerjaan', icon: BriefcaseBusiness },
-  { to: '/admin/pelatihan', label: 'LPK & pelatihan', icon: School },
-  { to: '/admin/lowongan', label: 'Lowongan', icon: Rss },
-]
 
 const TITLES: [RegExp, string][] = [
   [/^\/$/, 'Beranda'],
@@ -136,20 +124,9 @@ function UserMenu() {
         <DropdownMenuItem onSelect={() => go('/profil')}>
           <UserRound /> Profil
         </DropdownMenuItem>
-        <DropdownMenuItem
-          onSelect={() => {
-            resetDemo()
-            toast.success('Data demo dikembalikan ke awal')
-          }}
-        >
-          <RotateCcw /> Reset data demo
-        </DropdownMenuItem>
         <DropdownMenuSeparator />
         <DropdownMenuItem
-          onSelect={() => {
-            logout()
-            navigate('/masuk', { replace: true })
-          }}
+          onSelect={() => { void logout().then(() => navigate('/masuk', { replace: true })).catch((error) => toast.error(error instanceof Error ? error.message : 'Gagal keluar.')) }}
         >
           <LogOut /> Keluar
         </DropdownMenuItem>
@@ -159,7 +136,6 @@ function UserMenu() {
 }
 
 export function AppLayout() {
-  const user = useCurrentUser()!
   const { pathname } = useLocation()
   const title = TITLES.find(([re]) => re.test(pathname))?.[1] ?? 'Halaman tidak ditemukan'
 
@@ -172,12 +148,12 @@ export function AppLayout() {
     <SidebarProvider>
       <Sidebar collapsible="icon">
         <SidebarHeader className="h-14 justify-center px-3">
-          <Link to={user.role === 'admin' ? '/admin/skill' : '/'} className="rounded-md group-data-[collapsible=icon]:-ml-0.5" aria-label="CareerBridge">
+          <Link to={'/'} className="rounded-md group-data-[collapsible=icon]:-ml-0.5" aria-label="CareerBridge">
             <Logo className="[&>img:last-child]:group-data-[collapsible=icon]:hidden" />
           </Link>
         </SidebarHeader>
         <SidebarContent>
-          {user.role === 'admin' ? <NavGroup label="Kelola data" items={ADMIN_NAV} /> : <NavGroup label="Menu" items={USER_NAV} />}
+          <NavGroup label="Menu" items={USER_NAV} />
         </SidebarContent>
         <SidebarFooter>
           <SidebarMenu>
@@ -195,7 +171,7 @@ export function AppLayout() {
           <Separator orientation="vertical" className="mr-1 data-[orientation=vertical]:h-4" />
           <span className="truncate text-sm font-medium">{title}</span>
           <span className="ml-auto hidden rounded-full border border-dashed px-2.5 py-0.5 text-xs text-muted-foreground sm:inline">
-            Mode demo · data contoh
+            Katalog pelatihan contoh
           </span>
         </header>
         <div className="mx-auto w-full max-w-6xl px-4 py-6 sm:px-6 sm:py-8">

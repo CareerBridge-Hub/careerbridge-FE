@@ -21,6 +21,7 @@ const appRoutes: Plugin = {
 // https://vite.dev/config/
 export default defineConfig({
   plugins: [react(), tailwindcss(), appRoutes],
+  server: { proxy: { '/api': { target: 'http://127.0.0.1:8080', changeOrigin: false } } },
   resolve: { alias: { '@': root('./src') } },
   build: {
     rollupOptions: {
