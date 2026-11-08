@@ -61,14 +61,13 @@ function Programs({ db }: { db: Db }) {
     if (!normalizeKey(nama)) return fail('Nama kosong.')
     if (!lembaga) return fail(`Lembaga “${rec.lembaga ?? ''}” belum ada. Import lembaga dulu.`)
     // Accepts 850000, 850.000, Rp850.000; rejects decimals like 850.000,00 that would read as 85 juta.
-    if (!/^\s*(rp\.?\s*)?\d{1,3}([.,\s]?\d{3})*\s*$/i.test(rec.biaya ?? '')) return fail('biaya harus angka bulat, contoh 850000 (0 = gratis).')
-    const biaya = Number((rec.biaya ?? '').replace(/\D/g, ''))
-    const moda = (rec.moda ?? '').toLowerCase() as Moda
-    if (!MODES.includes(moda)) return fail('moda harus “daring” atau “luring”.')
+    if (rec.biaya?.trim() && !/^\s*(rp\.?\s*)?\d{1,3}([.,\s]?\d{3})*\s*$/i.test(rec.biaya)) return fail('biaya harus angka bulat, contoh 850000 (0 = gratis).')
+    const biaya = rec.biaya?.trim() ? Number(rec.biaya.replace(/\D/g, '')) : null
+    const moda = rec.moda?.trim() ? rec.moda.toLowerCase() as Moda : null
+    if (moda && !MODES.includes(moda)) return fail('moda harus “daring” atau “luring”.')
     if (!isUrl(rec.url_daftar ?? '')) return fail('url_daftar harus link http/https.')
     const sk = normalizeSkills(splitList(rec.skill), db.skills)
     if (sk.unknown.length) return fail(`Skill tidak ada di kamus: ${sk.unknown.join(', ')}`)
-    if (sk.matched.length === 0) return fail('Minimal satu skill.')
     const existing = db.trainings.find((x) => key(x.nama, x.institutionId) === k)
     return {
       ok: true,
@@ -98,11 +97,11 @@ function Programs({ db }: { db: Db }) {
             columns={[
               { name: 'nama', required: true },
               { name: 'lembaga', required: true },
-              { name: 'biaya', required: true },
-              { name: 'moda', required: true },
+              { name: 'biaya' },
+              { name: 'moda' },
               { name: 'durasi' },
               { name: 'url_daftar', required: true },
-              { name: 'skill', required: true },
+              { name: 'skill' },
             ]}
             example={['K3 Dasar', 'BLK Bekasi', '0', 'luring', '5 hari', 'https://contoh.go.id/daftar', 'K3 Dasar']}
             parse={parse}
@@ -138,7 +137,7 @@ function Programs({ db }: { db: Db }) {
                     <div className="text-xs text-muted-foreground">{inst.get(x.institutionId)?.nama}</div>
                   </TableCell>
                   <TableCell className="hidden md:table-cell">{rupiah(x.biaya)}</TableCell>
-                  <TableCell className="hidden capitalize sm:table-cell">{x.moda}</TableCell>
+                  <TableCell className="hidden capitalize sm:table-cell">{x.moda ?? 'Belum diketahui'}</TableCell>
                   <TableCell className="hidden max-w-xs lg:table-cell">
                     <div className="flex flex-wrap gap-1">
                       {x.skillIds.map((id) => (
@@ -172,8 +171,8 @@ function ProgramDialog({ training, db, onClose }: { training: Training | 'new' |
   const [f, setF] = useState({
     nama: existing?.nama ?? '',
     institutionId: existing?.institutionId ?? '',
-    biaya: String(existing?.biaya ?? 0),
-    moda: existing?.moda ?? ('luring' as Moda),
+    biaya: existing ? (existing.biaya === null ? '' : String(existing.biaya)) : '0',
+    moda: existing ? (existing.moda ?? '__unknown') : 'luring',
     durasi: existing?.durasi ?? '',
     urlDaftar: existing?.urlDaftar ?? '',
     skillIds: existing?.skillIds ?? [],
@@ -189,14 +188,13 @@ function ProgramDialog({ training, db, onClose }: { training: Training | 'new' |
     const next: typeof errors = {}
     if (!f.nama.trim()) next.nama = 'Nama wajib diisi.'
     if (!f.institutionId) next.institutionId = 'Pilih lembaga.'
-    if (!/^\d+$/.test(f.biaya)) next.biaya = 'Isi angka tanpa titik. 0 = gratis.'
+    if (f.biaya !== '' && !/^\d+$/.test(f.biaya)) next.biaya = 'Isi angka tanpa titik. 0 = gratis.'
     if (!isUrl(f.urlDaftar)) next.urlDaftar = 'Link harus diawali http:// atau https://'
-    if (f.skillIds.length === 0) next.skillIds = 'Pilih minimal satu skill.'
     setErrors(next)
     if (Object.keys(next).length) return
     setPending(true)
     try {
-      await saveTraining({ id: existing?.id, ...f, nama: f.nama.trim(), durasi: f.durasi.trim(), biaya: Number(f.biaya) })
+      await saveTraining({ id: existing?.id, ...f, nama: f.nama.trim(), durasi: f.durasi.trim(), biaya: f.biaya === '' ? null : Number(f.biaya), moda: f.moda === '__unknown' ? null : f.moda as Moda })
       toast.success(existing ? 'Program diperbarui' : 'Program ditambahkan')
       onClose()
     } catch (err) {
@@ -232,16 +230,16 @@ function ProgramDialog({ training, db, onClose }: { training: Training | 'new' |
             </Select>
           </Field>
           <div className="grid grid-cols-2 gap-3">
-            <Field label="Biaya (Rp)" htmlFor="tr-biaya" error={errors.biaya} hint={Number(f.biaya) === 0 ? 'Gratis' : rupiah(Number(f.biaya) || 0)}>
-              <Input id="tr-biaya" inputMode="numeric" value={f.biaya} onChange={(e) => setF({ ...f, biaya: e.target.value.replace(/\D/g, '') })} {...invalid('tr-biaya', errors.biaya)} />
+            <Field label="Biaya (Rp)" htmlFor="tr-biaya" error={errors.biaya} hint={f.biaya === '' ? 'Belum diketahui' : Number(f.biaya) === 0 ? 'Gratis' : rupiah(Number(f.biaya) || 0)}>
+              <Input id="tr-biaya" placeholder="Kosongkan jika belum diketahui" inputMode="numeric" value={f.biaya} onChange={(e) => setF({ ...f, biaya: e.target.value.replace(/\D/g, '') })} {...invalid('tr-biaya', errors.biaya)} />
             </Field>
             <Field label="Moda" htmlFor="tr-moda">
-              <Select value={f.moda} onValueChange={(v) => setF({ ...f, moda: v as Moda })}>
+              <Select value={f.moda} onValueChange={(v) => setF({ ...f, moda: v })}>
                 <SelectTrigger id="tr-moda" className="w-full">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="daring">Daring (online)</SelectItem>
+                  <SelectItem value="__unknown">Belum diketahui</SelectItem><SelectItem value="daring">Daring (online)</SelectItem>
                   <SelectItem value="luring">Luring (tatap muka)</SelectItem>
                 </SelectContent>
               </Select>
@@ -365,7 +363,7 @@ function Institutions({ db }: { db: Db }) {
                     </Button>
                     <ConfirmDelete
                       name={i.nama}
-                      detail={programs(i.id) > 0 ? `${programs(i.id)} program pelatihan dari lembaga ini ikut terhapus.` : undefined}
+                      detail={`${programs(i.id)} program pelatihan dan riwayat impor dari lembaga ini ikut terhapus.`}
                       onConfirm={() => deleteInstitution(i.id)}
                     />
                   </TableCell>

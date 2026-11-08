@@ -9,6 +9,9 @@ import {
   LayoutDashboard,
   LogOut,
   UserRound,
+  Tags,
+  School,
+  Rss,
   type LucideIcon,
 } from 'lucide-react'
 import { Avatar, AvatarFallback } from '@/app/components/ui/avatar'
@@ -49,8 +52,16 @@ const USER_NAV: NavItem[] = [
   { to: '/cv', label: 'CV & Skill', icon: FileText },
   { to: '/pekerjaan', label: 'Pekerjaan', icon: BriefcaseBusiness },
   { to: '/pelatihan', label: 'Pelatihan', icon: GraduationCap },
+  { to: '/lowongan', label: 'Lowongan', icon: BriefcaseBusiness },
 ]
 
+
+const ADMIN_NAV: NavItem[] = [
+  { to: '/admin/skill', label: 'Kamus skill', icon: Tags },
+  { to: '/admin/pekerjaan', label: 'Pekerjaan', icon: BriefcaseBusiness },
+  { to: '/admin/pelatihan', label: 'LPK & pelatihan', icon: School },
+  { to: '/admin/lowongan', label: 'Lowongan', icon: Rss },
+]
 
 const TITLES: [RegExp, string][] = [
   [/^\/$/, 'Beranda'],
@@ -136,6 +147,7 @@ function UserMenu() {
 }
 
 export function AppLayout() {
+  const user = useCurrentUser()!
   const { pathname } = useLocation()
   const title = TITLES.find(([re]) => re.test(pathname))?.[1] ?? 'Halaman tidak ditemukan'
 
@@ -153,7 +165,7 @@ export function AppLayout() {
           </Link>
         </SidebarHeader>
         <SidebarContent>
-          <NavGroup label="Menu" items={USER_NAV} />
+          <NavGroup label={user.role === 'admin' ? 'Admin' : 'Menu'} items={user.role === 'admin' ? ADMIN_NAV : USER_NAV} />
         </SidebarContent>
         <SidebarFooter>
           <SidebarMenu>
@@ -171,7 +183,7 @@ export function AppLayout() {
           <Separator orientation="vertical" className="mr-1 data-[orientation=vertical]:h-4" />
           <span className="truncate text-sm font-medium">{title}</span>
           <span className="ml-auto hidden rounded-full border border-dashed px-2.5 py-0.5 text-xs text-muted-foreground sm:inline">
-            Katalog pelatihan contoh
+            Katalog pelatihan
           </span>
         </header>
         <div className="mx-auto w-full max-w-6xl px-4 py-6 sm:px-6 sm:py-8">

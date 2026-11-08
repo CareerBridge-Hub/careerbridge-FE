@@ -328,6 +328,7 @@ export function seed(now = new Date()): Db {
       role: 'user',
       createdAt: new Date(now.getTime() - 12 * day).toISOString(),
       skills: rinaSkills.map((skillId) => ({ skillId, sumber: 'cv' })),
+      customSkills: [],
       targetJobId: 'operator-produksi',
       cv: {
         fileName: 'CV_Rina_Putri.pdf',
@@ -349,6 +350,7 @@ export function seed(now = new Date()): Db {
       role: 'admin',
       createdAt: new Date(now.getTime() - 30 * day).toISOString(),
       skills: [],
+      customSkills: [],
       targetJobId: null,
       cv: null,
     },

@@ -9,13 +9,17 @@ import { Card } from '@/app/components/ui/card'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/app/components/ui/select'
 import { Switch } from '@/app/components/ui/switch'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/app/components/ui/table'
-import { setPostingHidden, useDb } from '@/app/lib/api'
+import { setPostingHidden, useDb, useAdminSources, loadAdminCatalog } from '@/app/lib/api'
 import { formatDate } from '@/app/lib/format'
 
 const ALL = '__semua'
 
 export default function AdminLowongan() {
   const db = useDb()
+  const sources = useAdminSources()
+  const [now] = useState(()=>Date.now())
+  const [pending,setPending] = useState<string | null>(null)
+  const [refreshing,setRefreshing] = useState(false)
   const [job, setJob] = useState(ALL)
   const [status, setStatus] = useState<'semua' | 'tampil' | 'sembunyi'>('semua')
   const jobs = new Map(db.jobs.map((j) => [j.id, j]))
@@ -29,12 +33,16 @@ export default function AdminLowongan() {
     <>
       <PageHeader
         title="Lowongan"
-        description="Hasil tarikan otomatis dari Jooble dan JSearch. Sembunyikan lowongan yang tidak relevan supaya tidak tampil ke pengguna."
+        description="Hasil tarikan otomatis dari halaman karier perusahaan. Sembunyikan lowongan yang tidak relevan supaya tidak tampil ke pengguna. Lowongan yang ditutup sumber atau kedaluwarsa tetap tidak ditampilkan."
       />
       <p className="-mt-3 mb-5 flex items-center gap-1.5 text-xs text-muted-foreground">
-        <RefreshCw className="size-3.5" /> Tarikan terakhir: hari ini 06.00 · {db.postings.length} lowongan, {hiddenCount} disembunyikan
+        <RefreshCw className="size-3.5" /> Diperbarui tiap 6 jam · {db.postings.length} lowongan, {hiddenCount} disembunyikan
       </p>
 
+      <div className="mb-4 flex flex-wrap gap-2 text-xs">
+        {sources.map((source)=><span key={source.key} className="rounded-lg border bg-card px-3 py-2">{source.key}: {source.running ? 'sedang berjalan' : source.lastError ? 'gagal diperbarui' : source.lastSuccessAt ? `terakhir ${formatDate(source.lastSuccessAt)}` : 'belum dijalankan'} · {source.lastCount} lowongan</span>)}
+        <button className="underline disabled:opacity-50" disabled={refreshing} onClick={async()=>{setRefreshing(true);try{await loadAdminCatalog(true)}catch(error){toast.error(error instanceof Error?error.message:'Gagal memuat data.')}finally{setRefreshing(false)}}}>{refreshing?'Memuat...':'Muat ulang status'}</button>
+      </div>
       <div className="mb-4 flex flex-col gap-3 md:flex-row">
         <SearchBox value={t.q} onChange={t.setQ} placeholder="Cari judul, perusahaan, kota" />
         <Select
@@ -85,7 +93,7 @@ export default function AdminLowongan() {
                 <TableHead className="hidden md:table-cell">Pekerjaan</TableHead>
                 <TableHead className="hidden lg:table-cell">Sumber</TableHead>
                 <TableHead className="hidden sm:table-cell">Tanggal</TableHead>
-                <TableHead className="pr-4 text-right">Tampil</TableHead>
+                <TableHead className="pr-4 text-right">Izinkan tampil</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -99,6 +107,8 @@ export default function AdminLowongan() {
                     <div className="truncate text-xs text-muted-foreground">
                       {p.perusahaan} · {p.lokasi}
                     </div>
+                    {p.status === 'closed' && <Badge variant="outline">Sudah ditutup sumber</Badge>}
+                    {p.validUntil && Date.parse(p.validUntil)<now && <Badge variant="outline">Kedaluwarsa</Badge>}
                   </TableCell>
                   <TableCell className="hidden md:table-cell">{jobs.get(p.jobRoleId)?.nama}</TableCell>
                   <TableCell className="hidden lg:table-cell">
@@ -108,10 +118,15 @@ export default function AdminLowongan() {
                   <TableCell className="pr-4 text-right">
                     <Switch
                       checked={!p.hidden}
+                      disabled={pending===p.id}
                       aria-label={`Tampilkan ${p.judul} di ${p.perusahaan}`}
                       onCheckedChange={async (on) => {
-                        await setPostingHidden(p.id, !on)
-                        toast.success(on ? 'Lowongan ditampilkan' : 'Lowongan disembunyikan', { description: p.judul })
+                        setPending(p.id)
+                        try {
+                          await setPostingHidden(p.id, !on)
+                          toast.success(on ? 'Preferensi tampilan disimpan' : 'Lowongan disembunyikan', { description: p.judul })
+                        } catch(error) { toast.error(error instanceof Error ? error.message : 'Gagal menyimpan status.') }
+                        finally { setPending(null) }
                       }}
                     />
                   </TableCell>

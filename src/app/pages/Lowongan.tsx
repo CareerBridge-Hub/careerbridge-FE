@@ -1,70 +1,105 @@
-import { useState } from 'react'
 import { useSearchParams } from 'react-router'
-import { RefreshCw, Search } from 'lucide-react'
-import { PostingItem } from '@/app/components/cards'
-import { EmptyState, PageHeader } from '@/app/components/common'
+import { ExternalLink, MapPin, Search } from 'lucide-react'
+import { Badge } from '@/app/components/ui/badge'
+import { Button } from '@/app/components/ui/button'
 import { Input } from '@/app/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/app/components/ui/select'
-import { useCareer } from '@/app/lib/hooks'
-import { normalizeKey } from '@/app/lib/matching'
+import { EmptyState, PageHeader } from '@/app/components/common'
+import { PageControls } from '@/app/components/PageControls'
+import { fetchVacanciesPage, type Vacancy } from '@/app/lib/api'
+import { useServerPage, useUrlSearch } from '@/app/lib/hooks'
 
-const ALL = '__semua'
+const SOURCES = [
+  ['grab', 'Grab'],
+  ['cermati', 'Cermati.com'],
+  ['dkatalis', 'DKatalis'],
+  ['softwareseni', 'SoftwareSeni'],
+  ['kredivo', 'Kredivo Group'],
+] as const
+const CATEGORIES = [
+  ['software-engineer', 'Software Engineer & Developer'],
+  ['devops', 'DevOps'],
+  ['data-analyst', 'Data Analyst'],
+] as const
 
 export default function Lowongan() {
-  const { postings, ranked } = useCareer()
-  const [params, setParams] = useSearchParams()
-  const [q, setQ] = useState('')
-  const jobId = ranked.some((m) => m.job.id === params.get('job')) ? params.get('job')! : ALL
-  const byJob = new Map(ranked.map((m) => [m.job.id, m]))
-  const shown = postings.filter(
-    (p) =>
-      (jobId === ALL || p.jobRoleId === jobId) &&
-      normalizeKey(`${p.judul} ${p.perusahaan} ${p.lokasi}`).includes(normalizeKey(q)),
-  )
+  const [params,setParams] = useSearchParams()
+  const [q,setQ] = useUrlSearch('q')
+  const [city,setCity] = useUrlSearch('city')
+  const search=params.get('q') ?? ''
+  const selectedCity=params.get('city') ?? ''
+  const source=params.get('source') ?? ''
+  const category=params.get('category') ?? ''
+  const offset=Math.max(0,Number(params.get('offset')) || 0)
+  const limit=12
+  const result=useServerPage(fetchVacanciesPage,{q:search,city:selectedCity,source,category,offset,limit},q===search && city===selectedCity)
+  const change=(key:string,value:string)=>setParams((p)=>{if(value)p.set(key,value);else p.delete(key);p.delete('offset');return p})
+  const shown=result.data?.items ?? []
 
-  return (
-    <>
-      <PageHeader
-        title="Lowongan"
-        description="Contoh lowongan asli di Indonesia untuk setiap pekerjaan, lengkap dengan link ke sumbernya."
-      />
-      <p className="-mt-3 mb-5 flex items-center gap-1.5 text-xs text-muted-foreground">
-        <RefreshCw className="size-3.5" /> Diambil otomatis sekali sehari pukul 06.00 dari Jooble dan JSearch.
-      </p>
+  return <>
+    <PageHeader title="Lowongan" description="Lowongan software dari halaman karier perusahaan di Indonesia. Detail dan tautan lamaran berasal dari sumber perusahaan." />
+    <p className="-mt-3 mb-5 text-xs text-muted-foreground">Diperbarui otomatis tiap 6 jam. Lowongan yang sudah tutup atau lama tidak diperbarui tidak ditampilkan.</p>
 
-      <div className="mb-5 flex flex-col gap-3 sm:flex-row">
-        <Select value={jobId} onValueChange={(v) => setParams(v === ALL ? {} : { job: v }, { replace: true })}>
-          <SelectTrigger className="w-full bg-card sm:w-64" aria-label="Filter pekerjaan">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value={ALL}>Semua pekerjaan</SelectItem>
-            {ranked.map((m) => (
-              <SelectItem key={m.job.id} value={m.job.id}>
-                {m.job.nama}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-        <div className="relative sm:w-72">
-          <Search className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground" />
-          <Input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Cari judul, perusahaan, kota" className="bg-card pl-9" aria-label="Cari lowongan" />
-        </div>
+    <div className="mb-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="relative">
+        <Search className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground" />
+        <Input maxLength={120} value={q} onChange={(event)=>setQ(event.target.value)} placeholder="Cari posisi atau perusahaan" className="bg-card pl-9" aria-label="Cari posisi atau perusahaan" />
       </div>
+      <Input maxLength={200} value={city} onChange={(event)=>setCity(event.target.value)} placeholder="Filter kota, misal: Jakarta" className="bg-card" aria-label="Filter kota" />
+      <Select value={source || '__all'} onValueChange={(value)=>change('source',value==='__all'?'':value)}>
+        <SelectTrigger className="bg-card" aria-label="Filter sumber"><SelectValue placeholder="Semua sumber" /></SelectTrigger>
+        <SelectContent>
+          <SelectItem value="__all">Semua sumber</SelectItem>
+          {SOURCES.map(([key,label])=><SelectItem key={key} value={key}>{label}</SelectItem>)}
+        </SelectContent>
+      </Select>
+      <Select value={category || '__all'} onValueChange={(value)=>change('category',value==='__all'?'':value)}>
+        <SelectTrigger className="bg-card" aria-label="Filter kategori pekerjaan"><SelectValue placeholder="Semua kategori" /></SelectTrigger>
+        <SelectContent>
+          <SelectItem value="__all">Semua kategori</SelectItem>
+          {CATEGORIES.map(([key,label])=><SelectItem key={key} value={key}>{label}</SelectItem>)}
+        </SelectContent>
+      </Select>
+    </div>
 
-      <p className="mb-3 text-[13px] text-muted-foreground" aria-live="polite">
-        {shown.length} lowongan
-      </p>
-      {shown.length === 0 ? (
-        <EmptyState title="Tidak ada lowongan yang cocok">Coba ganti pekerjaan atau kata kunci.</EmptyState>
-      ) : (
-        <div className="grid gap-2.5">
-          {shown.map((p) => {
-            const m = byJob.get(p.jobRoleId)
-            return <PostingItem key={p.id} posting={p} jobName={jobId === ALL ? m?.job.nama : undefined} score={jobId === ALL ? m?.score : undefined} />
-          })}
-        </div>
-      )}
-    </>
-  )
+    {result.loading ? <p role="status">Memuat lowongan...</p> : result.error ? <p role="alert">{result.error} <button className="underline" onClick={result.retry}>Coba lagi</button></p> : shown.length===0 ? (
+      <EmptyState title="Tidak ada lowongan yang cocok">Coba hapus filter atau gunakan kata kunci lain.</EmptyState>
+    ) : <>
+      <p className="mb-3 text-[13px] text-muted-foreground" aria-live="polite">{result.data?.total ?? 0} lowongan</p>
+      <div className="grid gap-3 md:grid-cols-2">
+        {shown.map((vacancy)=><VacancyCard key={vacancy.id} vacancy={vacancy} />)}
+      </div>
+    </>}
+    <PageControls offset={offset} limit={limit} total={result.data?.total ?? 0} disabled={result.loading} onChange={(next)=>setParams((p)=>{p.set('offset',String(next));return p})} />
+  </>
+}
+
+function VacancyCard({vacancy:v}:{vacancy:Vacancy}) {
+  return <article className="flex flex-col rounded-xl border bg-card p-4 transition-shadow hover:shadow-md sm:p-5">
+    <div className="flex items-start justify-between gap-3">
+      <div className="min-w-0">
+        <h2 className="font-semibold leading-snug">{v.title}</h2>
+        <p className="mt-1 text-sm text-muted-foreground">{v.company}</p>
+      </div>
+      <div className="flex shrink-0 flex-wrap justify-end gap-1.5">
+        <Badge variant="secondary">{CATEGORIES.find(([key])=>key===v.category)?.[1] ?? 'Software Engineer & Developer'}</Badge>
+        <Badge variant="outline">{SOURCES.find(([key])=>key===v.source)?.[1] ?? v.source}</Badge>
+      </div>
+    </div>
+    <div className="mt-3 flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted-foreground">
+      <span className="inline-flex items-center gap-1"><MapPin className="size-3.5" />{[v.city,v.region].filter(Boolean).join(', ') || v.country}</span>
+      {v.workplace && <span>{v.workplace}</span>}
+      {v.employmentType && <span>{v.employmentType}</span>}
+      {v.postedAt && <span>Diposting {new Date(v.postedAt).toLocaleDateString('id-ID')}</span>}
+    </div>
+    {(v.description || v.requirements) && <details className="mt-4 border-t pt-3 text-sm">
+      <summary className="cursor-pointer font-medium">Detail dan kualifikasi</summary>
+      {v.description && <p className="mt-2 whitespace-pre-line text-muted-foreground">{v.description}</p>}
+      {v.requirements && <p className="mt-2 whitespace-pre-line"><span className="font-medium">Kualifikasi: </span>{v.requirements}</p>}
+    </details>}
+    <div className="mt-auto flex flex-wrap gap-2 pt-4">
+      <Button asChild size="sm"><a href={v.applyUrl} target="_blank" rel="noopener noreferrer">Lamar <ExternalLink /><span className="sr-only"> (buka di tab baru)</span></a></Button>
+      <Button asChild size="sm" variant="outline"><a href={v.sourceUrl} target="_blank" rel="noopener noreferrer">Lihat sumber <ExternalLink /><span className="sr-only"> (buka di tab baru)</span></a></Button>
+    </div>
+  </article>
 }

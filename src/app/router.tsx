@@ -1,8 +1,8 @@
-import { lazy, Suspense, type ReactNode } from 'react'
+import { lazy, Suspense, useEffect, useState, type ReactNode } from 'react'
 import { Navigate, Route, Routes, useLocation } from 'react-router'
 import { AppLayout } from './components/AppLayout'
 import { Skeleton } from './components/ui/skeleton'
-import { useCurrentUser, useApiStatus, refresh, logout } from './lib/api'
+import { useCurrentUser, useApiStatus, refresh, logout, loadAdminCatalog } from './lib/api'
 import Daftar from './pages/Daftar'
 import Masuk from './pages/Masuk'
 
@@ -14,6 +14,10 @@ const PekerjaanDetail = lazy(() => import('./pages/PekerjaanDetail'))
 const Pelatihan = lazy(() => import('./pages/Pelatihan'))
 const Lowongan = lazy(() => import('./pages/Lowongan'))
 const Profil = lazy(() => import('./pages/Profil'))
+const AdminSkill = lazy(() => import('./pages/admin/AdminSkill'))
+const AdminPekerjaan = lazy(() => import('./pages/admin/AdminPekerjaan'))
+const AdminPelatihan = lazy(() => import('./pages/admin/AdminPelatihan'))
+const AdminLowongan = lazy(() => import('./pages/admin/AdminLowongan'))
 const NotFound = lazy(() => import('./pages/NotFound'))
 
 function PageSkeleton() {
@@ -38,7 +42,7 @@ function RequireAuth({ role, children }: { role?: 'user' | 'admin'; children: Re
   if (state.loading) return <PageSkeleton />
   if (state.error) return <div role="alert" className="p-8">{state.error}<button className="ml-4 underline" onClick={() => void refresh().catch(() => {})}>Coba lagi</button><button className="ml-4 underline" onClick={() => void logout().catch(() => {})}>Masuk ulang</button></div>
   if (!user) return <Navigate to="/masuk" replace state={{ from: location.pathname + location.search }} />
-  if (role && user.role !== role) return <div role="alert" className="p-8">Fitur admin belum tersedia pada tahap ini. <button className="underline" onClick={() => void logout().catch(() => {})}>Keluar</button></div>
+  if (role && user.role !== role) return <Navigate to={user.role === 'admin' ? '/admin/skill' : '/'} replace />
   return children
 }
 
@@ -46,9 +50,25 @@ function GuestOnly({ children }: { children: ReactNode }) {
   const user = useCurrentUser()
   const state = useApiStatus()
   if (state.loading) return <PageSkeleton />
-  if (user) return <Navigate to={'/'} replace />
+  if (user) return <Navigate to={user.role === 'admin' ? '/admin/skill' : '/'} replace />
   return children
 }
+
+function AdminCatalogGate({children}:{children:ReactNode}) {
+  const user=useCurrentUser()
+  const [state,setState]=useState({owner:user?.id,loading:true,error:''})
+  const [attempt,retry]=useState(0)
+  useEffect(()=>{
+    let active=true
+    loadAdminCatalog(attempt>0).then(()=>{if(active)setState({owner:user?.id,loading:false,error:''})})
+      .catch((error)=>{if(active)setState({owner:user?.id,loading:false,error:error.message})})
+    return()=>{active=false}
+  },[user?.id,attempt])
+  if(state.owner!==user?.id || state.loading)return <PageSkeleton />
+  if(state.error)return <div role="alert">{state.error} <button className="underline" onClick={()=>{setState({owner:user?.id,loading:true,error:''});retry((n)=>n+1)}}>Coba lagi</button></div>
+  return children
+}
+const adminPage=(el:ReactNode)=><RequireAuth role="admin"><AdminCatalogGate>{page(el)}</AdminCatalogGate></RequireAuth>
 
 const page = (el: ReactNode) => <Suspense fallback={<PageSkeleton />}>{el}</Suspense>
 
@@ -68,6 +88,11 @@ export function AppRoutes() {
         <Route path="profil" element={page(<Profil />)} />
 
 
+        <Route path="admin" element={<RequireAuth role="admin"><Navigate to="/admin/skill" replace /></RequireAuth>} />
+        <Route path="admin/skill" element={adminPage(<AdminSkill />)} />
+        <Route path="admin/pekerjaan" element={adminPage(<AdminPekerjaan />)} />
+        <Route path="admin/pelatihan" element={adminPage(<AdminPelatihan />)} />
+        <Route path="admin/lowongan" element={adminPage(<AdminLowongan />)} />
         <Route path="*" element={page(<NotFound />)} />
       </Route>
     </Routes>

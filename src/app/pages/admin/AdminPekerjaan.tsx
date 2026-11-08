@@ -129,7 +129,7 @@ export default function AdminPekerjaan() {
                     </Button>
                     <ConfirmDelete
                       name={j.nama}
-                      detail="Lowongan untuk pekerjaan ini ikut terhapus, dan pengguna yang mengincarnya akan kehilangan pekerjaan incaran."
+                      detail="Pengguna yang mengincarnya akan kehilangan pekerjaan incaran. Lowongan dari sumber perusahaan tetap tersimpan."
                       onConfirm={() => deleteJob(j.id)}
                     />
                   </TableCell>

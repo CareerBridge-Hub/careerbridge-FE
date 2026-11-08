@@ -4,7 +4,7 @@ import {BrowserRouter} from 'react-router'
 import Cv from './Cv'
 const mocks=vi.hoisted(()=>({latest:vi.fn(),watch:vi.fn(),queue:vi.fn(),save:vi.fn(),skills:vi.fn(),signals:[] as AbortSignal[]}))
 vi.mock('@/app/lib/api',()=>({ApiError:class extends Error{},CV_STEPS:['Mengunggah file','Mengambil teks dari PDF','AI mengekstrak','Menyamakan skill'],deleteCv:vi.fn(),queueCv:mocks.queue,watchCv:mocks.watch,latestCv:mocks.latest,dismissCv:vi.fn(),fetchSkillsByIds:mocks.skills,saveSkills:mocks.save,validateCv:vi.fn(),cvResult:(job:{id:string;parsed:object})=>({...job.parsed,cvId:job.id,matched:[],unknown:[]})}))
-vi.mock('@/app/lib/hooks',()=>({useCareer:()=>({user:{id:'user-a',skills:[],cv:null},db:{skills:[]},skillsById:new Map()})}))
+vi.mock('@/app/lib/hooks',()=>({useServerPage:()=>({data:{items:[],total:0},loading:false,error:'',retry:vi.fn()}),useCareer:()=>({user:{id:'user-a',skills:[],cv:null},db:{skills:[]},skillsById:new Map()})}))
 vi.mock('@/app/components/SkillPicker',()=>({SkillPicker:()=>null}))
 beforeEach(()=>{vi.clearAllMocks();mocks.signals.length=0;mocks.skills.mockResolvedValue(undefined)})
 afterEach(cleanup)

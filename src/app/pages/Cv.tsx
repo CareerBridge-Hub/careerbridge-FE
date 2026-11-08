@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState, useRef, type DragEvent } from 'react'
 import { Link, useNavigate } from 'react-router'
 import { toast } from 'sonner'
-import { ArrowRight, Check, FileText, Loader2, RefreshCw, Sparkles, Trash2, Upload, X } from 'lucide-react'
+import { ArrowRight, Check, FileText, Loader2, Plus, RefreshCw, Sparkles, Trash2, Upload, X } from 'lucide-react'
 import { EmptyState, PageHeader, SkillBadge } from '@/app/components/common'
 import { SkillPicker } from '@/app/components/SkillPicker'
 import {
@@ -19,11 +19,16 @@ import { Button } from '@/app/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/app/components/ui/card'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/app/components/ui/dialog'
 import { ApiError, CV_STEPS, fetchSkillsByIds, deleteCv, queueCv, watchCv, latestCv, dismissCv, cvResult, type CvJob, saveSkills, validateCv, type ParsedCv } from '@/app/lib/api'
+import { fetchCatalog, type BrowseParams } from '@/app/lib/api'
 import { fileSize, formatDate } from '@/app/lib/format'
 import { useCareer } from '@/app/lib/hooks'
+import { useServerPage } from '@/app/lib/hooks'
 import { normalizeKey } from '@/app/lib/matching'
 import type { Skill, UserSkill } from '@/app/lib/types'
 import { cn } from '@/app/lib/utils'
+import { PageControls } from '@/app/components/PageControls'
+
+const loadSkillPage = (query: BrowseParams, signal?: AbortSignal) => fetchCatalog<Skill>('skills', query, signal)
 
 type Review = {
   file: {name:string;size:number}
@@ -32,6 +37,7 @@ type Review = {
   /** skill id → raw text the AI produced for it */
   skills: Map<string, string>
   unknown: string[]
+  customSkills: string[]
 }
 
 export default function Cv() {
@@ -53,7 +59,7 @@ export default function Cv() {
     await fetchSkillsByIds((parsed.matched ?? []).map((m)=>m.skillId),signal)
     if(signal.aborted)return
     setReview({file:file ?? {name:job.fileName,size:job.size},parsed,seconds:(job.durationMs ?? 0)/1000,
-      skills:new Map((parsed.matched ?? []).map((m)=>[m.skillId,m.raw])),unknown:parsed.unknown ?? []})
+      skills:new Map((parsed.matched ?? []).map((m)=>[m.skillId,m.raw])),unknown:parsed.unknown ?? [],customSkills:user.customSkills ?? []})
   }
   useEffect(()=>{
     const controller=new AbortController();connection.current=controller
@@ -169,7 +175,7 @@ export default function Cv() {
             </CardContent>
           </Card>
 
-          <SkillEditor key={user.skills.map((s) => s.skillId).join()} initial={user.skills} skills={db.skills} skillsById={skillsById} hasCv={!!user.cv} />
+          <SkillEditor key={user.skills.map((s) => s.skillId).join()} initial={user.skills} initialCustom={user.customSkills ?? []} skillsById={skillsById} hasCv={!!user.cv} />
         </div>
       )}
     </>
@@ -310,7 +316,7 @@ function ReviewCard({
         uploadedAt: new Date().toISOString(),
         pendidikan: review.parsed.pendidikan,
         pengalaman: review.parsed.pengalaman,
-      })
+      }, review.customSkills)
       onDone()
     } catch (err) {
       toast.error(err instanceof ApiError ? err.message : 'Gagal menyimpan. Coba lagi.')
@@ -335,7 +341,7 @@ function ReviewCard({
 
         <div className="grid content-start gap-5">
           <section>
-            <h3 className="text-sm font-medium">Skill terdeteksi ({review.skills.size})</h3>
+            <h3 className="text-sm font-medium">Skill terdeteksi ({review.skills.size + review.customSkills.length})</h3>
             <div className="mt-2 flex flex-wrap gap-1.5">
               {[...review.skills].map(([id, raw]) => {
                 const nama = skillsById.get(id)?.nama ?? id
@@ -351,7 +357,8 @@ function ReviewCard({
                   </SkillBadge>
                 )
               })}
-              <SkillPicker skills={skills} selected={new Set(review.skills.keys())} onToggle={(id) => toggle(id)} />
+              {review.customSkills.map((name)=><SkillBadge key={normalizeKey(name)} tone="owned" action={<RemoveButton label={name} onClick={()=>update({customSkills:review.customSkills.filter((item)=>normalizeKey(item)!==normalizeKey(name))})} />}>{name}<span className="font-normal opacity-70">(lainnya)</span></SkillBadge>)}
+              <SkillBrowser selected={new Set(review.skills.keys())} onToggle={(id)=>toggle(id)} customSkills={review.customSkills} onCustomSkillsChange={(customSkills)=>update({customSkills})} />
             </div>
           </section>
 
@@ -387,9 +394,9 @@ function ReviewCard({
           )}
 
           <div className="flex flex-wrap gap-2 border-t pt-5">
-            <Button size="lg" onClick={save} disabled={saving || review.skills.size === 0}>
+            <Button size="lg" onClick={save} disabled={saving || (review.skills.size === 0 && review.customSkills.length === 0)}>
               {saving && <Loader2 className="animate-spin" />}
-              Simpan {review.skills.size} skill
+              Simpan {review.skills.size + review.customSkills.length} skill
             </Button>
             <Button size="lg" variant="ghost" onClick={() => setReview(null)} disabled={saving}>
               Batal
@@ -416,26 +423,27 @@ function RemoveButton({ label, onClick }: { label: string; onClick: () => void }
 
 function SkillEditor({
   initial,
-  skills,
+  initialCustom,
   skillsById,
   hasCv,
 }: {
   initial: UserSkill[]
-  skills: Skill[]
+  initialCustom: string[]
   skillsById: Map<string, Skill>
   hasCv: boolean
 }) {
   const [draft, setDraft] = useState(initial)
+  const [customDraft, setCustomDraft] = useState(initialCustom)
   const [saving, setSaving] = useState(false)
   const selected = useMemo(() => new Set(draft.map((s) => s.skillId)), [draft])
-  const dirty = draft.length !== initial.length || initial.some((s) => !selected.has(s.skillId))
+  const dirty = draft.length !== initial.length || initial.some((s) => !selected.has(s.skillId)) || customDraft.join('\0') !== initialCustom.join('\0')
   const toggle = (id: string) =>
     setDraft((d) => (d.some((s) => s.skillId === id) ? d.filter((s) => s.skillId !== id) : [...d, { skillId: id, sumber: 'manual' }]))
 
   async function save() {
     setSaving(true)
     try {
-      await saveSkills(draft)
+      await saveSkills(draft, undefined, customDraft)
       toast.success('Skill diperbarui', { description: 'Skor kecocokan sudah dihitung ulang.' })
     } catch (err) {
       toast.error(err instanceof ApiError ? err.message : 'Gagal menyimpan. Coba lagi.')
@@ -446,13 +454,13 @@ function SkillEditor({
   return (
     <Card>
       <CardHeader>
-        <CardTitle className="text-base">Skill kamu ({draft.length})</CardTitle>
+        <CardTitle className="text-base">Skill kamu ({draft.length + customDraft.length})</CardTitle>
         <CardDescription>
           {hasCv ? 'Dari CV dan yang kamu tambahkan sendiri.' : 'Belum punya CV? Pilih skill-mu sendiri dari daftar.'}
         </CardDescription>
       </CardHeader>
       <CardContent>
-        {draft.length === 0 ? (
+        {draft.length === 0 && customDraft.length === 0 ? (
           <EmptyState title="Belum ada skill" className="border-none bg-muted/50 py-8">
             Upload CV atau pilih skill dari daftar.
           </EmptyState>
@@ -466,12 +474,12 @@ function SkillEditor({
                   {s.nama}
                 </SkillBadge>
               ))}
+            {customDraft.map((name)=><SkillBadge key={normalizeKey(name)} tone="owned" action={<RemoveButton label={name} onClick={()=>setCustomDraft(customDraft.filter((item)=>normalizeKey(item)!==normalizeKey(name)))} />}>{name}<span className="font-normal opacity-70">(lainnya)</span></SkillBadge>)}
           </div>
         )}
 
         <div className="mt-4 flex flex-wrap gap-2">
-          <SkillPicker skills={skills} selected={selected} onToggle={toggle} />
-          <SkillBrowser skills={skills} selected={selected} onToggle={toggle} />
+          <SkillBrowser selected={selected} onToggle={toggle} customSkills={customDraft} onCustomSkillsChange={setCustomDraft} />
         </div>
 
         <div
@@ -484,7 +492,7 @@ function SkillEditor({
           <div className="overflow-hidden">
             <div className="flex flex-wrap items-center gap-2 rounded-xl bg-primary p-3 text-sm text-white">
               <span className="mr-auto pl-1">Ada perubahan yang belum disimpan.</span>
-              <Button size="sm" variant="ghost" className="text-white hover:bg-white/10 hover:text-white" onClick={() => setDraft(initial)} disabled={saving}>
+              <Button size="sm" variant="ghost" className="text-white hover:bg-white/10 hover:text-white" onClick={() => {setDraft(initial);setCustomDraft(initialCustom)}} disabled={saving}>
                 Batal
               </Button>
               <Button size="sm" className="bg-mint text-primary hover:bg-mint/90" onClick={save} disabled={saving}>
@@ -508,26 +516,36 @@ function SkillEditor({
 }
 
 /** Browse the whole dictionary by category: friendlier than search when you don't know the names. */
-function SkillBrowser({ skills, selected, onToggle }: { skills: Skill[]; selected: Set<string>; onToggle: (id: string) => void }) {
+function SkillBrowser({ selected, onToggle, customSkills, onCustomSkillsChange }: { selected: Set<string>; onToggle: (id: string) => void; customSkills: string[]; onCustomSkillsChange: (values: string[]) => void }) {
+  const [open,setOpen]=useState(false)
+  const [offset,setOffset]=useState(0)
+  const [otherSkill, setOtherSkill] = useState('')
+  const page=useServerPage(loadSkillPage,{offset,limit:100},open)
+  const skills=page.data?.items ?? []
+  const addOtherSkill = () => {
+    const value=otherSkill.trim().replace(/\s+/g,' ')
+    if(!value || value.length>80 || customSkills.some((name)=>normalizeKey(name)===normalizeKey(value)))return
+    onCustomSkillsChange([...customSkills,value]);setOtherSkill('')
+  }
   const groups = useMemo(() => {
     const m = new Map<string, Skill[]>()
     for (const s of skills) m.set(s.kategori, [...(m.get(s.kategori) ?? []), s])
     return [...m].sort(([a], [b]) => a.localeCompare(b, 'id'))
   }, [skills])
   return (
-    <Dialog>
+    <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
-        <Button size="sm" variant="ghost" className="rounded-full">
-          Pilih dari daftar
+        <Button size="sm" variant="outline" className="rounded-full border-dashed">
+          <Plus /> Tambah skill
         </Button>
       </DialogTrigger>
       <DialogContent className="max-h-[85svh] grid-rows-[auto_minmax(0,1fr)_auto] sm:max-w-2xl">
         <DialogHeader>
           <DialogTitle>Pilih skill</DialogTitle>
-          <DialogDescription>Ketuk skill yang kamu kuasai. {selected.size} dipilih.</DialogDescription>
+          <DialogDescription>Ketuk skill yang kamu kuasai. {selected.size + customSkills.length} dipilih.</DialogDescription>
         </DialogHeader>
         <div className="-mx-6 overflow-y-auto px-6">
-          {groups.map(([kategori, list]) => (
+          {page.loading ? <p role="status" className="py-5 text-sm text-muted-foreground">Memuat daftar skill...</p> : page.error ? <p role="alert" className="py-5 text-sm">{page.error} <button className="underline" onClick={page.retry}>Coba lagi</button></p> : groups.map(([kategori, list]) => (
             <section key={kategori} className="mb-5">
               <h3 className="mb-2 text-xs font-medium tracking-wide text-muted-foreground uppercase">{kategori}</h3>
               <div className="flex flex-wrap gap-1.5">
@@ -552,6 +570,18 @@ function SkillBrowser({ skills, selected, onToggle }: { skills: Skill[]; selecte
               </div>
             </section>
           ))}
+          <section className="mb-4 rounded-xl border border-dashed p-3">
+            <h3 className="text-sm font-medium">Skill lain</h3>
+            <p className="mt-1 text-xs text-muted-foreground">Tambahkan skill yang belum ada di daftar. Bisa lebih dari satu; skill lain tersimpan di browser ini.</p>
+            <div className="mt-2 flex flex-wrap gap-1.5">
+              {customSkills.map((name)=><SkillBadge key={normalizeKey(name)} tone="owned" action={<RemoveButton label={name} onClick={()=>onCustomSkillsChange(customSkills.filter((item)=>normalizeKey(item)!==normalizeKey(name)))} />}>{name}<span className="font-normal opacity-70">(lainnya)</span></SkillBadge>)}
+            </div>
+            <form className="mt-3 flex gap-2" onSubmit={(event)=>{event.preventDefault();addOtherSkill()}}>
+              <input aria-label="Nama skill lain" value={otherSkill} maxLength={80} onChange={(event)=>setOtherSkill(event.target.value)} placeholder="Tulis nama skill…" className="h-9 min-w-0 flex-1 rounded-md border bg-background px-3 text-sm" />
+              <Button type="submit" variant="outline" disabled={!otherSkill.trim() || otherSkill.trim().length>80}>Tambah</Button>
+            </form>
+          </section>
+          {!page.loading && !page.error && <PageControls offset={offset} limit={100} total={page.data?.total ?? 0} onChange={setOffset} disabled={page.loading} />}
         </div>
         <DialogFooter>
           <DialogTrigger asChild>

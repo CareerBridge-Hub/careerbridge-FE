@@ -7,17 +7,27 @@ import { Badge } from '@/app/components/ui/badge'
 import { Button } from '@/app/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/app/components/ui/card'
 import { Skeleton } from '@/app/components/ui/skeleton'
-import { useCareer, useTypewriter, useAnalysis, useJob } from '@/app/lib/hooks'
+import { useCareer, useTypewriter, useAnalysis, useJob, useServerPage } from '@/app/lib/hooks'
+import { fetchVacanciesPage, type Vacancy } from '@/app/lib/api'
 import { cn } from '@/app/lib/utils'
 import { POINTS } from '@/app/lib/matching'
 import type { JobSkill, Skill } from '@/app/lib/types'
 import NotFound from './NotFound'
+
+const OCCUPATION_VACANCY_CATEGORIES: Record<string, string> = {
+  '96f251a2-ee07-5722-9da1-5a2e83e3361d': 'data-analyst',
+  'a9619ac0-8e03-4ddd-bc4f-b31bfb190ec4': 'software-engineer',
+  'a9619ac0-8e03-4ddd-bc4f-b31bfb190ec5': 'devops',
+  '0d15f37c-81cc-5931-8a81-b11d9aed89d3': 'software-engineer',
+}
 
 
 export default function PekerjaanDetail() {
   const { id } = useParams()
   const { user, skillsById, db, instById, postings } = useCareer()
   const detail = useJob(id)
+  const vacancyCategory = id ? OCCUPATION_VACANCY_CATEGORIES[id] : undefined
+  const vacancies = useServerPage(fetchVacanciesPage, { category: vacancyCategory, limit: 5 }, !!vacancyCategory)
   const m = detail.data?.items[0]
   const analysis = useAnalysis(id)
   if (detail.loading) return <p role="status">Memuat pekerjaan...</p>
@@ -161,7 +171,7 @@ export default function PekerjaanDetail() {
           </div>
           <div className="grid gap-3 lg:grid-cols-3">
             {recs.map((r) => (
-              <TrainingCard key={r.training.id} training={r.training} inst={instById.get(r.training.institutionId)} skillsById={skillsById} wajibGap={wajibGap} opsionalGap={opsGap} />
+              <TrainingCard key={r.training.id} training={r.training} evidence={analysis.data?.trainingEvidence?.[r.training.id]} inst={instById.get(r.training.institutionId)} skillsById={skillsById} wajibGap={wajibGap} opsionalGap={opsGap} />
             ))}
           </div>
         </section>
@@ -170,12 +180,20 @@ export default function PekerjaanDetail() {
       {!!analysis.data?.relatedTrainings?.length && <section className="mt-8">
         <h2 className="mb-3 font-display text-lg">Pelatihan terkait lainnya</h2>
         <p className="mb-3 text-sm text-muted-foreground">Periksa silabus untuk memastikan skill yang diajarkan sesuai kebutuhanmu.</p>
-        <div className="grid gap-3 lg:grid-cols-3">{analysis.data.relatedTrainings.map((training)=><TrainingCard key={training.id} training={training} inst={instById.get(training.institutionId)} skillsById={skillsById} wajibGap={wajibGap} opsionalGap={opsGap}/>)}</div>
+        <div className="grid gap-3 lg:grid-cols-3">{analysis.data.relatedTrainings.map((training)=><TrainingCard key={training.id} training={training} evidence={analysis.data?.trainingEvidence?.[training.id]} inst={instById.get(training.institutionId)} skillsById={skillsById} wajibGap={wajibGap} opsionalGap={opsGap}/>)}</div>
       </section>}
 
       <section className="mt-8">
         <h2 className="mb-3 font-display text-lg">Contoh lowongan</h2>
-        {jobPostings.length > 0 ? (
+        {vacancyCategory ? vacancies.loading ? (
+          <p role="status" className="rounded-xl border border-dashed bg-card p-6 text-center text-sm text-muted-foreground">Memuat lowongan...</p>
+        ) : vacancies.error ? (
+          <p role="alert" className="rounded-xl border border-dashed bg-card p-6 text-center text-sm text-muted-foreground">{vacancies.error} <button className="underline" onClick={vacancies.retry}>Coba lagi</button></p>
+        ) : vacancies.data?.items.length ? (
+          <div className="grid gap-2.5">
+            {vacancies.data.items.map((vacancy) => <RelatedVacancy key={vacancy.id} vacancy={vacancy} />)}
+          </div>
+        ) : <p className="rounded-xl border border-dashed bg-card p-6 text-center text-sm text-muted-foreground">Belum ada lowongan aktif untuk kategori ini.</p> : jobPostings.length > 0 ? (
           <div className="grid gap-2.5">
             {jobPostings.map((p) => (
               <PostingItem key={p.id} posting={p} />
@@ -187,6 +205,16 @@ export default function PekerjaanDetail() {
       </section>
     </>
   )
+}
+
+function RelatedVacancy({ vacancy }: { vacancy: Vacancy }) {
+  return <article className="flex flex-wrap items-center justify-between gap-3 rounded-xl border bg-card p-4">
+    <div className="min-w-0">
+      <h3 className="font-medium">{vacancy.title}</h3>
+      <p className="mt-1 text-sm text-muted-foreground">{vacancy.company} · {[vacancy.city, vacancy.region].filter(Boolean).join(', ') || vacancy.country}</p>
+    </div>
+    <Button asChild size="sm"><a href={vacancy.applyUrl} target="_blank" rel="noopener noreferrer">Lihat lowongan <ArrowRight /><span className="sr-only"> (buka di tab baru)</span></a></Button>
+  </article>
 }
 
 function SkillColumn({

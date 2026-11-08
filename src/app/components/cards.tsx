@@ -3,7 +3,7 @@ import { toast } from 'sonner'
 import { Clock, ExternalLink, MapPin, Monitor, Star, Users } from 'lucide-react'
 import { Badge } from '@/app/components/ui/badge'
 import { Button } from '@/app/components/ui/button'
-import { setTarget } from '@/app/lib/api'
+import { setTarget, type TrainingEvidence } from '@/app/lib/api'
 import { relativeDay, rupiah } from '@/app/lib/format'
 import type { Institution, JobPosting, Skill, Training } from '@/app/lib/types'
 import { cn } from '@/app/lib/utils'
@@ -11,6 +11,7 @@ import { SkillBadge } from './common'
 
 export function TrainingCard({
   training: t,
+  evidence,
   inst,
   skillsById,
   wajibGap,
@@ -18,6 +19,7 @@ export function TrainingCard({
   className,
 }: {
   training: Training
+  evidence?: TrainingEvidence
   inst: Institution | undefined
   skillsById: Map<string, Skill>
   wajibGap: Set<string>
@@ -60,6 +62,12 @@ export function TrainingCard({
         ))}
       </div>
 
+      {evidence && <div className="mt-3 space-y-1 text-xs text-muted-foreground">
+        {evidence.method === 'mapped' && <p>Memiliki pemetaan skill dalam katalog.</p>}
+        {(evidence.method === 'semantic' || evidence.method === 'text') && <p>Topik terkait{evidence.relatedSkillIds.length ? `: ${evidence.relatedSkillIds.map((id)=>skillsById.get(id)?.nama).filter(Boolean).join(', ')}` : ''}. Periksa silabus untuk memastikan skill yang diajarkan.</p>}
+        {evidence.source && <p>Sumber: {evidence.source}{evidence.sourceUrl && /^https?:\/\//i.test(evidence.sourceUrl) && <> · <a className="underline" href={evidence.sourceUrl} target="_blank" rel="noopener noreferrer">Lihat sumber</a></>}</p>}
+      </div>}
+
       <div className="mt-auto flex flex-wrap items-center justify-between gap-3 pt-4">
         <ul className="flex flex-wrap gap-x-4 gap-y-1 text-[13px] text-muted-foreground">
           <li className="flex items-center gap-1.5">
@@ -77,7 +85,7 @@ export function TrainingCard({
         </ul>
         <Button asChild size="sm" variant="outline">
           <a href={t.urlDaftar} target="_blank" rel="noopener noreferrer">
-            Daftar <ExternalLink />
+            {t.sample ? 'Daftar' : 'Lihat program'} <ExternalLink />
             <span className="sr-only">(buka di tab baru)</span>
           </a>
         </Button>

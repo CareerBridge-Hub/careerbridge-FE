@@ -49,7 +49,10 @@ export type JobPosting = {
   perusahaan: string
   lokasi: string
   url: string
-  sumber: 'Jooble' | 'JSearch'
+  sumber: string
+  status?: 'active' | 'closed'
+  validUntil?: string | null
+  lastSeenAt?: string
   /** ISO date. */
   tanggal: string
   hidden: boolean
@@ -79,6 +82,7 @@ export type User = {
   role: 'user' | 'admin'
   createdAt: string
   skills: UserSkill[]
+  customSkills: string[]
   targetJobId: string | null
   cv: CvUpload | null
 }
