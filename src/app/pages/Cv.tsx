@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState, useRef, type DragEvent } from 'react'
 import { Link, useNavigate } from 'react-router'
 import { toast } from 'sonner'
 import { ArrowRight, Check, FileText, Loader2, Plus, RefreshCw, Sparkles, Trash2, Upload, X } from 'lucide-react'
-import { EmptyState, PageHeader, SkillBadge } from '@/app/components/common'
+import { ChipsSkeleton, EmptyState, LoadingNote, PageHeader, SkillBadge } from '@/app/components/common'
 import { SkillPicker } from '@/app/components/SkillPicker'
 import {
   AlertDialog,
@@ -17,6 +17,7 @@ import {
 } from '@/app/components/ui/alert-dialog'
 import { Button } from '@/app/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/app/components/ui/card'
+import { Skeleton } from '@/app/components/ui/skeleton'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/app/components/ui/dialog'
 import { ApiError, CV_STEPS, fetchSkillsByIds, deleteCv, queueCv, watchCv, latestCv, dismissCv, cvResult, type CvJob, saveSkills, validateCv, type ParsedCv } from '@/app/lib/api'
 import { fetchCatalog, type BrowseParams } from '@/app/lib/api'
@@ -114,7 +115,7 @@ export default function Cv() {
         {!failure.terminal && <Button variant="outline" className="ml-3" onClick={()=>void reconnect()}>Sambung lagi</Button>}
         {failure.id && failure.terminal && <Button variant="ghost" onClick={()=>void dismissCv(failure.id!).then(()=>setFailure(null)).catch((e)=>toast.error(e.message))}>Abaikan hasil</Button>}
       </div>}
-      {checking ? <p role="status">Memeriksa proses CV sebelumnya...</p> : processing ? (
+      {checking ? <CvSkeleton /> : processing ? (
         <ProcessingCard step={processing.step} fileName={processing.fileName} />
       ) : review ? (
         <ReviewCard
@@ -179,6 +180,52 @@ export default function Cv() {
         </div>
       )}
     </>
+  )
+}
+
+/** Mirrors the idle layout (CV card + skill editor) so nothing jumps when the check finishes. */
+function CvSkeleton() {
+  return (
+    <div className="grid gap-3">
+      <LoadingNote>Memeriksa proses CV sebelumnya...</LoadingNote>
+      <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.25fr)] lg:items-start" aria-hidden>
+        <Card>
+          <CardHeader className="gap-2">
+            <Skeleton className="h-5 w-24" />
+            <Skeleton className="h-3.5 w-64 max-w-full" />
+          </CardHeader>
+          <CardContent className="grid gap-4">
+            <div className="flex items-center gap-3 rounded-xl border p-3">
+              <Skeleton className="size-10 shrink-0 rounded-lg" />
+              <div className="grid flex-1 gap-2">
+                <Skeleton className="h-4 w-3/5" />
+                <Skeleton className="h-3 w-2/5" />
+              </div>
+            </div>
+            <div className="grid gap-2">
+              <Skeleton className="h-3.5 w-20" />
+              <Skeleton className="h-3.5 w-full" />
+              <Skeleton className="h-3.5 w-4/5" />
+            </div>
+            <div className="flex gap-2">
+              <Skeleton className="h-9 w-28 rounded-lg" />
+              <Skeleton className="h-9 w-24 rounded-lg" />
+            </div>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader className="gap-2">
+            <Skeleton className="h-5 w-32" />
+            <Skeleton className="h-3.5 w-72 max-w-full" />
+          </CardHeader>
+          <CardContent className="grid gap-5">
+            <Skeleton className="h-9 w-full rounded-lg" />
+            <ChipsSkeleton count={10} />
+            <Skeleton className="h-9 w-32 rounded-lg" />
+          </CardContent>
+        </Card>
+      </div>
+    </div>
   )
 }
 
@@ -545,7 +592,7 @@ function SkillBrowser({ selected, onToggle, customSkills, onCustomSkillsChange }
           <DialogDescription>Ketuk skill yang kamu kuasai. {selected.size + customSkills.length} dipilih.</DialogDescription>
         </DialogHeader>
         <div className="-mx-6 overflow-y-auto px-6">
-          {page.loading ? <p role="status" className="py-5 text-sm text-muted-foreground">Memuat daftar skill...</p> : page.error ? <p role="alert" className="py-5 text-sm">{page.error} <button className="underline" onClick={page.retry}>Coba lagi</button></p> : groups.map(([kategori, list]) => (
+          {page.loading ? <div className="grid gap-3 py-5"><LoadingNote>Memuat daftar skill...</LoadingNote><ChipsSkeleton count={12} /></div> : page.error ? <p role="alert" className="py-5 text-sm">{page.error} <button className="underline" onClick={page.retry}>Coba lagi</button></p> : groups.map(([kategori, list]) => (
             <section key={kategori} className="mb-5">
               <h3 className="mb-2 text-xs font-medium tracking-wide text-muted-foreground uppercase">{kategori}</h3>
               <div className="flex flex-wrap gap-1.5">

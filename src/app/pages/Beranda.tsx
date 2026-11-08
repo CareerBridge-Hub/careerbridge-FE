@@ -2,7 +2,7 @@ import { Link } from 'react-router'
 import { Bar, BarChart, Cell, LabelList, XAxis, YAxis } from 'recharts'
 import { ArrowRight, BadgeCheck, BriefcaseBusiness, FileText, GraduationCap, Target, TriangleAlert } from 'lucide-react'
 import { PostingItem } from '@/app/components/cards'
-import { EmptyState, PageHeader, Score, ScoreBar, SkillBadge, Stat } from '@/app/components/common'
+import { DashboardSkeleton, EmptyState, PageHeader, Score, ScoreBar, SkillBadge, Stat } from '@/app/components/common'
 import { Button } from '@/app/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/app/components/ui/card'
 import { ChartContainer, ChartTooltip, ChartTooltipContent, type ChartConfig } from '@/app/components/ui/chart'
@@ -18,7 +18,7 @@ export default function Beranda() {
   const freeForFocus = useFreeTrainingCount()
   const firstName = user.nama.split(' ')[0]
 
-  if (dashboard.loading) return <p role="status">Memuat ringkasan...</p>
+  if (dashboard.loading) return <DashboardSkeleton label="Memuat ringkasan..." />
   if (dashboard.error) return <p role="alert">{dashboard.error} <button onClick={dashboard.retry}>Coba lagi</button></p>
 
   if (user.skills.length === 0)

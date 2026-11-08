@@ -4,7 +4,7 @@ import { Badge } from '@/app/components/ui/badge'
 import { Button } from '@/app/components/ui/button'
 import { Input } from '@/app/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/app/components/ui/select'
-import { EmptyState, PageHeader } from '@/app/components/common'
+import { CardGridSkeleton, EmptyState, PageHeader } from '@/app/components/common'
 import { PageControls } from '@/app/components/PageControls'
 import { fetchVacanciesPage, type Vacancy } from '@/app/lib/api'
 import { useServerPage, useUrlSearch } from '@/app/lib/hooks'
@@ -15,11 +15,7 @@ const SOURCES = [
   ['dkatalis', 'DKatalis'],
   ['softwareseni', 'SoftwareSeni'],
   ['kredivo', 'Kredivo Group'],
-] as const
-const CATEGORIES = [
-  ['software-engineer', 'Software Engineer & Developer'],
-  ['devops', 'DevOps'],
-  ['data-analyst', 'Data Analyst'],
+  ['openwebninja', 'Google Jobs'],
 ] as const
 
 export default function Lowongan() {
@@ -29,16 +25,17 @@ export default function Lowongan() {
   const search=params.get('q') ?? ''
   const selectedCity=params.get('city') ?? ''
   const source=params.get('source') ?? ''
-  const category=params.get('category') ?? ''
+  const occupation=params.get('occupation') ?? ''
   const offset=Math.max(0,Number(params.get('offset')) || 0)
   const limit=12
-  const result=useServerPage(fetchVacanciesPage,{q:search,city:selectedCity,source,category,offset,limit},q===search && city===selectedCity)
+  const result=useServerPage(fetchVacanciesPage,{q:search,city:selectedCity,source,occupation,offset,limit},q===search && city===selectedCity)
   const change=(key:string,value:string)=>setParams((p)=>{if(value)p.set(key,value);else p.delete(key);p.delete('offset');return p})
   const shown=result.data?.items ?? []
+  const occupations=result.data?.occupationOptions ?? []
 
   return <>
-    <PageHeader title="Lowongan" description="Lowongan software dari halaman karier perusahaan di Indonesia. Detail dan tautan lamaran berasal dari sumber perusahaan." />
-    <p className="-mt-3 mb-5 text-xs text-muted-foreground">Diperbarui otomatis tiap 6 jam. Lowongan yang sudah tutup atau lama tidak diperbarui tidak ditampilkan.</p>
+    <PageHeader title="Lowongan" description="Lowongan kerja di Indonesia dari halaman karier perusahaan dan Google Jobs. Detail dan tautan lamaran berasal dari sumber aslinya." />
+    <p className="-mt-3 mb-5 text-xs text-muted-foreground">Diperbarui otomatis: halaman karier perusahaan tiap 6 jam, Google Jobs sekali sehari bergiliran per kategori. Lowongan yang sudah tutup atau lama tidak diperbarui tidak ditampilkan.</p>
 
     <div className="mb-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
       <div className="relative">
@@ -53,16 +50,16 @@ export default function Lowongan() {
           {SOURCES.map(([key,label])=><SelectItem key={key} value={key}>{label}</SelectItem>)}
         </SelectContent>
       </Select>
-      <Select value={category || '__all'} onValueChange={(value)=>change('category',value==='__all'?'':value)}>
+      <Select value={occupation || '__all'} onValueChange={(value)=>change('occupation',value==='__all'?'':value)}>
         <SelectTrigger className="bg-card" aria-label="Filter kategori pekerjaan"><SelectValue placeholder="Semua kategori" /></SelectTrigger>
         <SelectContent>
           <SelectItem value="__all">Semua kategori</SelectItem>
-          {CATEGORIES.map(([key,label])=><SelectItem key={key} value={key}>{label}</SelectItem>)}
+          {occupations.map((o)=><SelectItem key={o.id} value={o.id}>{o.nama}</SelectItem>)}
         </SelectContent>
       </Select>
     </div>
 
-    {result.loading ? <p role="status">Memuat lowongan...</p> : result.error ? <p role="alert">{result.error} <button className="underline" onClick={result.retry}>Coba lagi</button></p> : shown.length===0 ? (
+    {result.loading ? <CardGridSkeleton label="Memuat lowongan..." count={4} cols="md:grid-cols-2" /> : result.error ? <p role="alert">{result.error} <button className="underline" onClick={result.retry}>Coba lagi</button></p> : shown.length===0 ? (
       <EmptyState title="Tidak ada lowongan yang cocok">Coba hapus filter atau gunakan kata kunci lain.</EmptyState>
     ) : <>
       <p className="mb-3 text-[13px] text-muted-foreground" aria-live="polite">{result.data?.total ?? 0} lowongan</p>
@@ -82,7 +79,7 @@ function VacancyCard({vacancy:v}:{vacancy:Vacancy}) {
         <p className="mt-1 text-sm text-muted-foreground">{v.company}</p>
       </div>
       <div className="flex shrink-0 flex-wrap justify-end gap-1.5">
-        <Badge variant="secondary">{CATEGORIES.find(([key])=>key===v.category)?.[1] ?? 'Software Engineer & Developer'}</Badge>
+        {v.occupationName && <Badge variant="secondary">{v.occupationName}</Badge>}
         <Badge variant="outline">{SOURCES.find(([key])=>key===v.source)?.[1] ?? v.source}</Badge>
       </div>
     </div>

@@ -1,5 +1,5 @@
 import { useSearchParams } from 'react-router'
-import { PageHeader, EmptyState, SkillBadge } from '@/app/components/common'
+import { CardGridSkeleton, PageHeader, EmptyState, SkillBadge } from '@/app/components/common'
 import { TrainingCard } from '@/app/components/cards'
 import { PageControls } from '@/app/components/PageControls'
 import { Input } from '@/app/components/ui/input'
@@ -66,7 +66,7 @@ export default function Pelatihan() {
     {!!job && <div className="mb-4 flex flex-wrap gap-2"><Button variant="outline" size="sm" onClick={()=>change('skillId','')}>Semua skill</Button>{[...(m?.missingWajib ?? []),...(m?.missingOpsional ?? [])].map((s)=><button key={s.skillId} aria-pressed={skill===s.skillId} onClick={()=>change('skillId',s.skillId)}><SkillBadge tone={s.tipe==='wajib'?'wajib':'opsional'}>{skillsById.get(s.skillId)?.nama ?? s.skillId}</SkillBadge></button>)}</div>}
     {params.get('province') && <p className="mb-3 text-sm text-muted-foreground">Pelatihan daring tetap tampil karena bisa diikuti dari mana saja.</p>}
     {result.data?.retrieval?.notice && <p role="status" className="mb-3 text-sm text-muted-foreground">{result.data.retrieval.notice}</p>}
-    {result.loading ? <p role="status">Memuat pelatihan...</p> : result.error ? <p role="alert">{result.error} <button onClick={result.retry}>Coba lagi</button></p> : !result.data?.items.length ? <EmptyState title="Tidak ada pelatihan yang cocok dengan filter" action={<Button variant="outline" onClick={()=>setParams({})}>Hapus filter</Button>}/> : <div className="grid gap-3 md:grid-cols-2">{result.data.items.map((t)=><TrainingCard key={t.id} training={t} evidence={result.data?.evidence?.[t.id]} inst={institutions.get(t.institutionId)} skillsById={skillsById} wajibGap={wajib} opsionalGap={ops}/>)}</div>}
+    {result.loading ? <CardGridSkeleton label="Memuat pelatihan..." count={4} cols="md:grid-cols-2" /> : result.error ? <p role="alert">{result.error} <button onClick={result.retry}>Coba lagi</button></p> : !result.data?.items.length ? <EmptyState title="Tidak ada pelatihan yang cocok dengan filter" action={<Button variant="outline" onClick={()=>setParams({})}>Hapus filter</Button>}/> : <div className="grid gap-3 md:grid-cols-2">{result.data.items.map((t)=><TrainingCard key={t.id} training={t} evidence={result.data?.evidence?.[t.id]} inst={institutions.get(t.institutionId)} skillsById={skillsById} wajibGap={wajib} opsionalGap={ops}/>)}</div>}
     <PageControls offset={offset} limit={12} total={result.data?.total ?? 0} disabled={result.loading} onChange={(n)=>setParams((p)=>{p.set('offset',String(n));return p})}/>
   </>
 }

@@ -1,7 +1,7 @@
 import { lazy, Suspense, useEffect, useState, type ReactNode } from 'react'
 import { Navigate, Route, Routes, useLocation } from 'react-router'
 import { AppLayout } from './components/AppLayout'
-import { Skeleton } from './components/ui/skeleton'
+import { AppShellSkeleton, LoadingNote, PageSkeleton } from './components/common'
 import { useCurrentUser, useApiStatus, refresh, logout, loadAdminCatalog } from './lib/api'
 import Daftar from './pages/Daftar'
 import Masuk from './pages/Masuk'
@@ -20,26 +20,12 @@ const AdminPelatihan = lazy(() => import('./pages/admin/AdminPelatihan'))
 const AdminLowongan = lazy(() => import('./pages/admin/AdminLowongan'))
 const NotFound = lazy(() => import('./pages/NotFound'))
 
-function PageSkeleton() {
-  return (
-    <div className="grid gap-4" aria-busy="true" aria-label="Memuat halaman">
-      <Skeleton className="h-8 w-56" />
-      <Skeleton className="h-4 w-80 max-w-full" />
-      <div className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        {[0, 1, 2, 3].map((i) => (
-          <Skeleton key={i} className="h-28 rounded-xl" />
-        ))}
-      </div>
-      <Skeleton className="h-64 rounded-xl" />
-    </div>
-  )
-}
-
-function RequireAuth({ role, children }: { role?: 'user' | 'admin'; children: ReactNode }) {
+/** `shell` marks the outer gate: AppLayout is not mounted yet, so it draws the layout frame itself. */
+function RequireAuth({ role, shell, children }: { role?: 'user' | 'admin'; shell?: boolean; children: ReactNode }) {
   const user = useCurrentUser()
   const state = useApiStatus()
   const location = useLocation()
-  if (state.loading) return <PageSkeleton />
+  if (state.loading) return shell ? <AppShellSkeleton /> : <PageSkeleton />
   if (state.error) return <div role="alert" className="p-8">{state.error}<button className="ml-4 underline" onClick={() => void refresh().catch(() => {})}>Coba lagi</button><button className="ml-4 underline" onClick={() => void logout().catch(() => {})}>Masuk ulang</button></div>
   if (!user) return <Navigate to="/masuk" replace state={{ from: location.pathname + location.search }} />
   if (role && user.role !== role) return <Navigate to={user.role === 'admin' ? '/admin/skill' : '/'} replace />
@@ -49,7 +35,7 @@ function RequireAuth({ role, children }: { role?: 'user' | 'admin'; children: Re
 function GuestOnly({ children }: { children: ReactNode }) {
   const user = useCurrentUser()
   const state = useApiStatus()
-  if (state.loading) return <PageSkeleton />
+  if (state.loading) return <div className="grid min-h-dvh place-items-center"><LoadingNote>Memeriksa sesi...</LoadingNote></div>
   if (user) return <Navigate to={user.role === 'admin' ? '/admin/skill' : '/'} replace />
   return children
 }
@@ -78,7 +64,7 @@ export function AppRoutes() {
       <Route path="masuk" element={<GuestOnly><Masuk /></GuestOnly>} />
       <Route path="daftar" element={<GuestOnly><Daftar /></GuestOnly>} />
 
-      <Route element={<RequireAuth><AppLayout /></RequireAuth>}>
+      <Route element={<RequireAuth shell><AppLayout /></RequireAuth>}>
         <Route index element={<RequireAuth role="user">{page(<Beranda />)}</RequireAuth>} />
         <Route path="cv" element={<RequireAuth role="user">{page(<Cv />)}</RequireAuth>} />
         <Route path="pekerjaan" element={<RequireAuth role="user">{page(<Pekerjaan />)}</RequireAuth>} />

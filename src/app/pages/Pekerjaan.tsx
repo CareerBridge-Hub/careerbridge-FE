@@ -1,7 +1,7 @@
 import { Link, useSearchParams } from 'react-router'
 import { ArrowRight, Search } from 'lucide-react'
 import { TargetButton } from '@/app/components/cards'
-import { EmptyState, PageHeader, ScoreBar } from '@/app/components/common'
+import { CardGridSkeleton, EmptyState, PageHeader, ScoreBar } from '@/app/components/common'
 import { Badge } from '@/app/components/ui/badge'
 import { Button } from '@/app/components/ui/button'
 import { Input } from '@/app/components/ui/input'
@@ -66,7 +66,7 @@ export default function Pekerjaan() {
         </ToggleGroup>
       </div>
 
-      {result.loading ? <p role="status">Memuat pekerjaan...</p> : result.error ? <p role="alert">{result.error} <button onClick={result.retry}>Coba lagi</button></p> : shown.length === 0 ? (
+      {result.loading ? <CardGridSkeleton label="Memuat pekerjaan..." /> : result.error ? <p role="alert">{result.error} <button onClick={result.retry}>Coba lagi</button></p> : shown.length === 0 ? (
         <EmptyState title="Tidak ada pekerjaan yang cocok dengan pencarian" />
       ) : (
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
