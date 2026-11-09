@@ -5,7 +5,6 @@ import { PageControls } from '@/app/components/PageControls'
 import { Input } from '@/app/components/ui/input'
 import { Button } from '@/app/components/ui/button'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/app/components/ui/select'
-import { PROVINCES } from '@/app/data/seed'
 import { fetchTrainingPage, useTrainingOccupations } from '@/app/lib/api'
 import { useCareer, useServerPage, useJob, useUrlSearch } from '@/app/lib/hooks'
 
@@ -38,7 +37,7 @@ export default function Pelatihan() {
   const recommended=params.get('recommended')!=='false' && !!job
   const skill=params.get('skillId') ?? ''
   const result=useServerPage(fetchTrainingPage,{offset,limit:12,q:search,occupationId:job,recommended,
-    cost:params.get('cost') ?? '', mode:params.get('mode') ?? '',province:params.get('province') ?? '',skillId:skill},q===search)
+    cost:params.get('cost') ?? '', mode:params.get('mode') ?? '',skillId:skill},q===search)
   const occupations=useTrainingOccupations() ?? OCCUPATIONS.map(([id,nama])=>({id,nama}))
   const change=(key:string,value:string)=>setParams((p)=>{if(value)p.set(key,value);else p.delete(key);p.delete('offset');if(key==='job')p.delete('skillId');if(key==='jobSearch')p.delete('jobOffset');return p})
   const institutions=new Map((result.data?.institutions ?? []).map((i)=>[i.id,i]))
@@ -58,15 +57,14 @@ export default function Pelatihan() {
         </Select>
       </label>
       <Filter label="Biaya" value={params.get('cost') ?? ''} onChange={(v)=>change('cost',v)} options={['gratis','berbayar','unknown']} labels={['Gratis','Berbayar','Belum diketahui']}/>
-      <Filter label="Cara belajar" value={params.get('mode') ?? ''} onChange={(v)=>change('mode',v)} options={['daring','luring','unknown']} labels={['Daring','Tatap muka','Belum diketahui']}/>
-      <Filter label="Provinsi" value={params.get('province') ?? ''} onChange={(v)=>change('province',v)} options={PROVINCES}/>
+      <Filter label="Online / Offline" value={params.get('mode') ?? ''} onChange={(v)=>change('mode',v)} options={['daring','luring','unknown']} labels={['Online (daring)','Offline (tatap muka)','Belum diketahui']}/>
       <Filter label="Urutan" value={recommended?'true':'false'} onChange={(v)=>change('recommended',v || 'false')} options={job?['true','false']:['false']} labels={job?['Rekomendasi skill yang kurang','Semua pelatihan']:['Semua pelatihan']}/>
     </div>
     {job && detail.error && <p role="alert">{detail.error} <button onClick={detail.retry}>Coba lagi</button></p>}
     {!!job && <div className="mb-4 flex flex-wrap gap-2"><Button variant="outline" size="sm" onClick={()=>change('skillId','')}>Semua skill</Button>{[...(m?.missingWajib ?? []),...(m?.missingOpsional ?? [])].map((s)=><button key={s.skillId} aria-pressed={skill===s.skillId} onClick={()=>change('skillId',s.skillId)}><SkillBadge tone={s.tipe==='wajib'?'wajib':'opsional'}>{skillsById.get(s.skillId)?.nama ?? s.skillId}</SkillBadge></button>)}</div>}
-    {params.get('province') && <p className="mb-3 text-sm text-muted-foreground">Pelatihan daring tetap tampil karena bisa diikuti dari mana saja.</p>}
+    <p className="mb-3 text-sm text-muted-foreground">Pelatihan offline hanya dari provinsi domisilimu ({user.provinsi}). Pelatihan online tetap tampil karena bisa diikuti dari mana saja. Ubah domisili di halaman Profil.</p>
     {result.data?.retrieval?.notice && <p role="status" className="mb-3 text-sm text-muted-foreground">{result.data.retrieval.notice}</p>}
-    {result.loading ? <CardGridSkeleton label="Memuat pelatihan..." count={4} cols="md:grid-cols-2" /> : result.error ? <p role="alert">{result.error} <button onClick={result.retry}>Coba lagi</button></p> : !result.data?.items.length ? <EmptyState title="Tidak ada pelatihan yang cocok dengan filter" action={<Button variant="outline" onClick={()=>setParams({})}>Hapus filter</Button>}/> : <div className="grid gap-3 md:grid-cols-2">{result.data.items.map((t)=><TrainingCard key={t.id} training={t} evidence={result.data?.evidence?.[t.id]} inst={institutions.get(t.institutionId)} skillsById={skillsById} wajibGap={wajib} opsionalGap={ops}/>)}</div>}
+    {result.loading ? <CardGridSkeleton label="Memuat pelatihan..." count={4} cols="md:grid-cols-2" /> : result.error ? <p role="alert">{result.error} <button onClick={result.retry}>Coba lagi</button></p> : !result.data?.items.length ? <EmptyState title="Tidak ada pelatihan yang cocok dengan filter" action={<Button variant="outline" onClick={()=>setParams({})}>Hapus filter</Button>}/> : <div className="grid grid-cols-1 gap-3 md:grid-cols-2">{result.data.items.map((t)=><TrainingCard key={t.id} training={t} evidence={result.data?.evidence?.[t.id]} inst={institutions.get(t.institutionId)} skillsById={skillsById} wajibGap={wajib} opsionalGap={ops}/>)}</div>}
     <PageControls offset={offset} limit={12} total={result.data?.total ?? 0} disabled={result.loading} onChange={(n)=>setParams((p)=>{p.set('offset',String(n));return p})}/>
   </>
 }

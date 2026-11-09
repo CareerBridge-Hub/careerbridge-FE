@@ -214,7 +214,7 @@ export function Sheet() {
             <div className="sheettextwrap">
               <h3 className="sheetsubtitle">Saring sesukamu</h3>
               <p className="sheettext">
-                Saring gratis atau berbayar, online atau tatap muka, dan provinsi. Daftarnya lewat link penyelenggara.
+                Saring gratis atau berbayar dan online atau tatap muka. Pelatihan tatap muka disesuaikan dengan provinsi domisilimu. Daftarnya lewat link penyelenggara.
               </p>
             </div>
           </div>

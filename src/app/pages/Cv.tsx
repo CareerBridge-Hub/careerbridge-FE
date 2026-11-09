@@ -135,7 +135,7 @@ export default function Cv() {
           }}
         />
       ) : (
-        <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.25fr)] lg:items-start">
+        <div className="grid grid-cols-1 gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.25fr)] lg:items-start">
           <Card>
             <CardHeader>
               <CardTitle className="text-base">CV kamu</CardTitle>
@@ -143,7 +143,7 @@ export default function Cv() {
             </CardHeader>
             <CardContent>
               {user.cv && !replacing ? (
-                <div className="grid gap-4">
+                <div className="grid grid-cols-1 gap-4">
                   <div className="flex items-center gap-3 rounded-xl border bg-muted/50 p-3">
                     <span className="grid size-10 shrink-0 place-items-center rounded-lg bg-danger-soft text-danger-ink">
                       <FileText className="size-5" />

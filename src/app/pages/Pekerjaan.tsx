@@ -69,7 +69,7 @@ export default function Pekerjaan() {
       {result.loading ? <CardGridSkeleton label="Memuat pekerjaan..." /> : result.error ? <p role="alert">{result.error} <button onClick={result.retry}>Coba lagi</button></p> : shown.length === 0 ? (
         <EmptyState title="Tidak ada pekerjaan yang cocok dengan pencarian" />
       ) : (
-        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
           {shown.map((m, i) => {
             const isTarget = user.targetJobId === m.job.id
             return (
@@ -82,10 +82,10 @@ export default function Pekerjaan() {
                 style={{ animationDelay: `${Math.min(i, 8) * 40}ms` }}
               >
                 <div className="flex items-start justify-between gap-2">
-                  <Badge variant="secondary" className="text-[11px]">
+                  <Badge variant="secondary" className="min-w-0 shrink text-[11px] whitespace-normal">
                     {m.job.bidang}
                   </Badge>
-                  <span className="text-xs text-muted-foreground">KBJI {m.job.kodeKbji}</span>
+                  <span className="shrink-0 text-xs whitespace-nowrap text-muted-foreground">KBJI {m.job.kodeKbji}</span>
                 </div>
                 <h2 className="mt-3 font-semibold">
                   <Link to={`/pekerjaan/${m.job.id}`} className="after:absolute after:inset-0 after:rounded-xl focus-visible:outline-none after:focus-visible:ring-[3px] after:focus-visible:ring-ring/50">

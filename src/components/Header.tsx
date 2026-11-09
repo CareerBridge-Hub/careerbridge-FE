@@ -29,9 +29,9 @@ export function Header() {
   return (
     <div ref={ref} className="section headersection">
       <div className="container vertical-align-stretch">
-        <header className="header">
+        <header className="header ">
           <a href="/" className="logo w-inline-block" aria-label="Beranda CareerBridge">
-            <img src="/assets/group-1116.svg" alt="" className="logoimage" />
+            <img src="/assets/careerbridge/logo-mark.svg" alt="" className="logoimage" />
             <img src="/assets/careerbridge/logo-text.svg" alt="CareerBridge" className="logotext" />
           </a>
           <div className="headercontent">

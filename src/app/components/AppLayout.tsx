@@ -186,9 +186,12 @@ export function AppLayout() {
             Katalog pelatihan
           </span>
         </header>
-        <div className="mx-auto w-full max-w-6xl px-4 py-6 sm:px-6 sm:py-8">
-          <div key={pathname} className="animate-page-in">
-            <Outlet />
+        <div className="w-full p-2 sm:p-4 lg:p-5">
+          {/* Background panel only: page content sits on it, the white cards inside stay the real cards. */}
+          <div className="min-h-[calc(100svh-3.5rem-1rem)] rounded-[1.5rem] border border-border/80 bg-surface sm:min-h-[calc(100svh-3.5rem-2rem)] lg:min-h-[calc(100svh-3.5rem-2.5rem)]">
+            <div key={pathname} className="mx-auto w-full max-w-6xl animate-page-in px-3 py-5 sm:px-6 sm:py-8 lg:px-8">
+              <Outlet />
+            </div>
           </div>
         </div>
       </SidebarInset>

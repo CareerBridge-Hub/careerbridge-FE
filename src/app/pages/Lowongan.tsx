@@ -75,7 +75,7 @@ export default function Lowongan() {
       <EmptyState title="Tidak ada lowongan yang cocok">Coba hapus filter atau gunakan kata kunci lain.</EmptyState>
     ) : <>
       <p className="mb-3 text-[13px] text-muted-foreground" aria-live="polite">{result.data?.total ?? 0} lowongan</p>
-      <div className="grid gap-3 md:grid-cols-2">
+      <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
         {shown.map((vacancy)=><VacancyCard key={vacancy.id} vacancy={vacancy} skillNames={skillNames} />)}
       </div>
     </>}
@@ -89,12 +89,12 @@ function VacancyCard({vacancy:v,skillNames}:{vacancy:Vacancy;skillNames:Map<stri
   const missing=missingIds.flatMap((id)=>skillNames.get(id) ?? [])
   const extra=missing.length>5 ? ` +${missing.length-5} lainnya` : ''
   return <article className="flex flex-col rounded-xl border bg-card p-4 transition-shadow hover:shadow-md sm:p-5">
-    <div className="flex items-start justify-between gap-3">
+    <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between sm:gap-3">
       <div className="min-w-0">
         <h2 className="font-semibold leading-snug">{v.title}</h2>
         <p className="mt-1 text-sm text-muted-foreground">{v.company}</p>
       </div>
-      <div className="flex shrink-0 flex-wrap justify-end gap-1.5">
+      <div className="flex flex-wrap gap-1.5 sm:shrink-0 sm:justify-end [&>*]:max-w-full [&>*]:whitespace-normal">
         {v.matchScore!=null && <Badge>{`Cocok ${v.matchScore}%`}</Badge>}
         {v.occupationName && <Badge variant="secondary">{v.occupationName}</Badge>}
         <Badge variant="outline">{SOURCES.find(([key])=>key===v.source)?.[1] ?? v.source}</Badge>

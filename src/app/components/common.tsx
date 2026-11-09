@@ -7,7 +7,7 @@ import { Skeleton } from '@/app/components/ui/skeleton'
 export function Logo({ className }: { className?: string }) {
   return (
     <span className={cn('flex items-center gap-2.5', className)}>
-      <img src="/assets/group-1116.svg" alt="" className="size-8 shrink-0" />
+      <img src="/assets/careerbridge/logo-mark.svg" alt="" className="size-8 shrink-0" />
       <img src="/assets/careerbridge/logo-text.svg" alt="CareerBridge" className="h-[17px] w-auto" />
     </span>
   )
@@ -142,7 +142,7 @@ export function CardGridSkeleton({ label, count = 6, cols = 'sm:grid-cols-2 lg:g
   return (
     <div className="grid gap-3">
       <LoadingNote>{label}</LoadingNote>
-      <div className={cn('grid gap-3', cols)} aria-hidden>
+      <div className={cn('grid grid-cols-1 gap-3', cols)} aria-hidden>
         {Array.from({ length: count }, (_, i) => (
           <div key={i} className="grid gap-3 rounded-xl border bg-card p-5">
             <div className="flex justify-between">

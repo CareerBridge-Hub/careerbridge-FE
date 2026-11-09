@@ -224,3 +224,12 @@
     transition: none;
   }
 }
+
+/* Header logo mark: the SVG has only a viewBox, so without a size it fills the header.
+   Webflow sizes it only at <=479px (32px); give larger screens a matching size. */
+@media screen and (min-width: 480px) {
+  .logoimage {
+    width: 40px;
+    height: 40px;
+  }
+}

@@ -38,6 +38,7 @@
   --radius: 0.875rem;
 
   --background: #f2f2f2;
+  --surface: #f8f9fb;
   --foreground: #151b31;
   --card: #ffffff;
   --card-foreground: #151b31;
@@ -91,6 +92,7 @@
   --radius-xl: calc(var(--radius) + 4px);
 
   --color-background: var(--background);
+  --color-surface: var(--surface);
   --color-foreground: var(--foreground);
   --color-card: var(--card);
   --color-card-foreground: var(--card-foreground);
