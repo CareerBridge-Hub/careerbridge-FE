@@ -71,7 +71,7 @@ export async function fetchTrainingPage(query: BrowseParams, signal?: AbortSigna
   if (!signal?.aborted) { trainingOccupations=page.occupationOptions ?? trainingOccupations; metadata(page) }
   return page
 }
-export type Vacancy = {id:string;source:string;sourceId:string;company:string;title:string;occupationId:string|null;occupationName:string|null;country:string;city:string;region:string;workplace:string;employmentType:string;description:string;requirements:string;applyUrl:string;sourceUrl:string;postedAt:string|null;validUntil:string|null;lastSeenAt:string}
+export type Vacancy = {id:string;source:string;sourceId:string;company:string;title:string;occupationId:string|null;occupationName:string|null;country:string;city:string;region:string;workplace:string;employmentType:string;description:string;requirements:string;applyUrl:string;sourceUrl:string;postedAt:string|null;validUntil:string|null;lastSeenAt:string;matchScore:number|null;ownedSkillIds:string[];missingSkillIds:string[]}
 export async function fetchVacanciesPage(query: BrowseParams, signal?: AbortSignal): Promise<PageResult<Vacancy>> {
   return api<PageResult<Vacancy>>(`/me/vacancies?${queryString(query)}`,{signal})
 }
