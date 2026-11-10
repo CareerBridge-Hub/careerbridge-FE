@@ -1,10 +1,10 @@
 # procoder handoff
 
 <!-- procoder:facts -->
-generated: 2026-11-09T15:44:58Z
-branch: proposal-stage-login-cv — 4 ahead, 0 behind master
-head: 85413e4
-dirty files: 17
+generated: 2026-11-10T15:23:30Z
+branch: proposal-stage-login-cv — 5 ahead, 0 behind master
+head: 2a3cbcd
+dirty files: 7
 sprint: none — no backlog yet (`procoder backlog` starts one)
 open tasks: none
 unlearned lessons: none — no ledger at .procoder/github/LESSONS.md

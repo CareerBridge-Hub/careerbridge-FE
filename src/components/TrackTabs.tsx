@@ -64,8 +64,7 @@ function PreviewVideo() {
     <div className="preview-frame">
       <video
         ref={ref}
-        src="/assets/careerbridge/munder-difflin-053.mp4"
-        poster="/assets/careerbridge/munder-difflin-053-poster.webp"
+        poster="/assets/careerbridge/careerbridge-promo-poster.webp"
         aria-label="Video tampilan CareerBridge"
         className="preview-video"
         muted
@@ -76,7 +75,11 @@ function PreviewVideo() {
         onPlay={() => setPlaying(true)}
         onPause={() => setPlaying(false)}
         onTimeUpdate={(e) => setProgress(e.currentTarget.currentTime / (e.currentTarget.duration || 1))}
-      />
+      >
+        {/* Phones get the 720p cut (~4.6 MB); larger screens the 1080p one (~8.7 MB). Both 30fps H.264, faststart. */}
+        <source src="/assets/careerbridge/careerbridge-promo-720.mp4" type="video/mp4" media="(max-width: 767px)" />
+        <source src="/assets/careerbridge/careerbridge-promo-1080.mp4" type="video/mp4" />
+      </video>
       <div className="preview-controls">
         <button type="button" className="preview-btn icon" onClick={togglePlay} aria-label={playing ? 'Jeda video' : 'Putar video'}>
           {playing ? <Pause aria-hidden="true" /> : <Play aria-hidden="true" />}
