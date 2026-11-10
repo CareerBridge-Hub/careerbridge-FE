@@ -1,0 +1,145 @@
+name: Publish to VPS
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: publish-vps-production
+  cancel-in-progress: false
+
+env:
+  CONTAINER_NAME: careerbridge-fe
+  APP_PORT: 3000
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+      packages: write
+    outputs:
+      image: ${{ steps.image.outputs.name }}
+      digest: ${{ steps.publish.outputs.digest }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+      - run: npm ci
+      - run: npm test
+      - run: npm run test:integration
+      - run: npm run lint
+      - name: Image name
+        id: image
+        run: echo "name=ghcr.io/${GITHUB_REPOSITORY,,}" >> "$GITHUB_OUTPUT"
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - uses: docker/setup-buildx-action@v3
+      - name: Build dist and publish runtime image
+        id: publish
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          target: runtime
+          push: true
+          tags: |
+            ${{ steps.image.outputs.name }}:sha-${{ github.sha }}
+            ${{ steps.image.outputs.name }}:latest
+          build-args: |
+            VITE_API_URL=/api/v1
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      packages: read
+    steps:
+      - name: Install SSH password helper
+        run: sudo apt-get update && sudo apt-get install --yes sshpass
+      - name: Deploy immutable image to VPS
+        env:
+          VPS_HOST: ${{ secrets.VPS_HOST }}
+          VPS_USERNAME: ${{ secrets.VPS_USERNAME }}
+          SSHPASS: ${{ secrets.VPS_PASSWORD }}
+          GHCR_USERNAME: ${{ github.actor }}
+          GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          IMAGE: ${{ needs.build.outputs.image }}@${{ needs.build.outputs.digest }}
+        run: |
+          set -euo pipefail
+          : "${VPS_HOST:?Set VPS_HOST}"
+          : "${VPS_USERNAME:?Set VPS_USERNAME}"
+          : "${SSHPASS:?Set VPS_PASSWORD}"
+          {
+            for name in GHCR_USERNAME GHCR_TOKEN IMAGE APP_PORT CONTAINER_NAME; do
+              printf 'export %s=%q\n' "$name" "${!name}"
+            done
+            cat <<'REMOTE'
+          set -euo pipefail
+          export DOCKER_CONFIG
+          DOCKER_CONFIG=$(mktemp -d)
+          trap 'rm -rf "$DOCKER_CONFIG"' EXIT
+          printf '%s' "$GHCR_TOKEN" | docker login ghcr.io -u "$GHCR_USERNAME" --password-stdin
+          docker pull "$IMAGE"
+          previous="${CONTAINER_NAME}-previous"
+          docker rm -f "$previous" 2>/dev/null || true
+          if docker container inspect "$CONTAINER_NAME" >/dev/null 2>&1; then
+            docker stop "$CONTAINER_NAME"
+            docker rename "$CONTAINER_NAME" "$previous"
+          fi
+          rollback() {
+            docker logs --tail 50 "$CONTAINER_NAME" 2>/dev/null || true
+            docker rm -f "$CONTAINER_NAME" 2>/dev/null || true
+            if docker container inspect "$previous" >/dev/null 2>&1; then
+              docker rename "$previous" "$CONTAINER_NAME"
+              docker start "$CONTAINER_NAME"
+            fi
+          }
+          trap 'rollback' ERR
+          docker run -d \
+            --name "$CONTAINER_NAME" \
+            --restart unless-stopped \
+            --read-only \
+            --tmpfs /tmp:rw,noexec,nosuid,size=64m,mode=1777 \
+            --security-opt no-new-privileges:true \
+            --cap-drop ALL \
+            --pids-limit 128 \
+            --log-opt max-size=10m --log-opt max-file=3 \
+            --add-host host.docker.internal:host-gateway \
+            -p "127.0.0.1:$APP_PORT:8080" \
+            "$IMAGE"
+          healthy=false
+          for attempt in $(seq 1 30); do
+            if [ "$(docker inspect --format '{{.State.Health.Status}}' "$CONTAINER_NAME")" = healthy ]; then
+              healthy=true
+              break
+            fi
+            sleep 2
+          done
+          if [ "$healthy" != true ]; then
+            echo 'Frontend failed its health check; restoring previous container.' >&2
+            false
+          fi
+          trap - ERR
+          docker rm -f "$previous" 2>/dev/null || true
+          REMOTE
+          } | sshpass -e ssh \
+            -o StrictHostKeyChecking=accept-new \
+            -o ConnectTimeout=15 \
+            -o PreferredAuthentications=password \
+            -o PubkeyAuthentication=no \
+            "$VPS_USERNAME@$VPS_HOST" 'bash -s'
