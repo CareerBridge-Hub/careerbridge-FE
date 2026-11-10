@@ -7,10 +7,20 @@ COPY . .
 ARG VITE_API_URL=/api/v1
 ENV VITE_API_URL=${VITE_API_URL}
 RUN npm run build
-RUN test -s /app/dist/index.html \
-    && test -s /app/dist/app/index.html \
-    && grep -q 'CareerBridge' /app/dist/index.html \
-    && ! grep -q 'Welcome to nginx' /app/dist/index.html
+RUN set -eu; \
+    find /app/dist -maxdepth 2 -type f -name '*.html' -print; \
+    for page in /app/dist/index.html /app/dist/app/index.html; do \
+      if [ ! -s "$page" ]; then \
+        echo "ERROR: Missing or empty built page: $page" >&2; exit 1; \
+      fi; \
+      if ! grep -qi 'CareerBridge' "$page"; then \
+        echo "ERROR: Built page does not contain CareerBridge: $page" >&2; \
+        head -n 20 "$page"; exit 1; \
+      fi; \
+      if grep -qi 'Welcome to nginx' "$page"; then \
+        echo "ERROR: Built page contains the Nginx welcome page: $page" >&2; exit 1; \
+      fi; \
+    done
 
 FROM nginxinc/nginx-unprivileged:stable-alpine AS runtime
 COPY docker/nginx.conf /etc/nginx/conf.d/default.conf
