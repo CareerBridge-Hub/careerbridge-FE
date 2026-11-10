@@ -12,10 +12,6 @@ concurrency:
   group: publish-vps-production
   cancel-in-progress: false
 
-env:
-  CONTAINER_NAME: careerbridge-fe
-  APP_PORT: 3000
-
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -85,57 +81,55 @@ jobs:
           : "${VPS_USERNAME:?Set VPS_USERNAME}"
           : "${SSHPASS:?Set VPS_PASSWORD}"
           {
-            for name in GHCR_USERNAME GHCR_TOKEN IMAGE APP_PORT CONTAINER_NAME; do
+            for name in GHCR_USERNAME GHCR_TOKEN IMAGE; do
               printf 'export %s=%q\n' "$name" "${!name}"
             done
             cat <<'REMOTE'
           set -euo pipefail
-          export DOCKER_CONFIG
-          DOCKER_CONFIG=$(mktemp -d)
-          trap 'rm -rf "$DOCKER_CONFIG"' EXIT
-          printf '%s' "$GHCR_TOKEN" | docker login ghcr.io -u "$GHCR_USERNAME" --password-stdin
-          docker pull "$IMAGE"
-          previous="${CONTAINER_NAME}-previous"
-          docker rm -f "$previous" 2>/dev/null || true
-          if docker container inspect "$CONTAINER_NAME" >/dev/null 2>&1; then
-            docker stop "$CONTAINER_NAME"
-            docker rename "$CONTAINER_NAME" "$previous"
+          # The backend workflow owns ~/careerbridge (compose.yaml, Caddyfile, be.env).
+          if ! cd "$HOME/careerbridge" 2>/dev/null || [ ! -f compose.yaml ]; then
+            echo 'No ~/careerbridge/compose.yaml on the VPS. Run the backend "Publish to VPS" workflow first.' >&2
+            exit 1
           fi
-          rollback() {
-            docker logs --tail 50 "$CONTAINER_NAME" 2>/dev/null || true
-            docker rm -f "$CONTAINER_NAME" 2>/dev/null || true
-            if docker container inspect "$previous" >/dev/null 2>&1; then
-              docker rename "$previous" "$CONTAINER_NAME"
-              docker start "$CONTAINER_NAME"
-            fi
+          # Keep the registry token out of ~/.docker; compose runs after it is gone.
+          (
+            export DOCKER_CONFIG
+            DOCKER_CONFIG=$(mktemp -d)
+            trap 'rm -rf "$DOCKER_CONFIG"' EXIT
+            printf '%s' "$GHCR_TOKEN" | docker login ghcr.io -u "$GHCR_USERNAME" --password-stdin
+            docker pull "$IMAGE"
+          )
+          umask 077
+          # ponytail: no lock on .env; the backend workflow edits BE_IMAGE and DOMAIN
+          # in the same file. Add flock if the two deploys ever overlap in practice.
+          set_env() {
+            { grep -v "^$1=" .env 2>/dev/null || true; printf '%s=%s\n' "$1" "$2"; } > .env.tmp
+            mv .env.tmp .env
           }
-          trap 'rollback' ERR
-          docker run -d \
-            --name "$CONTAINER_NAME" \
-            --restart unless-stopped \
-            --read-only \
-            --tmpfs /tmp:rw,noexec,nosuid,size=64m,mode=1777 \
-            --security-opt no-new-privileges:true \
-            --cap-drop ALL \
-            --pids-limit 128 \
-            --log-opt max-size=10m --log-opt max-file=3 \
-            --add-host host.docker.internal:host-gateway \
-            -p "0.0.0.0:$APP_PORT:8080" \
-            "$IMAGE"
-          healthy=false
-          for attempt in $(seq 1 30); do
-            if [ "$(docker inspect --format '{{.State.Health.Status}}' "$CONTAINER_NAME")" = healthy ]; then
-              healthy=true
-              break
+          start_fe() {
+            set_env FE_IMAGE "$1" || return 1
+            docker compose up -d --no-deps fe || return 1
+            fe_id=$(docker compose ps -q fe)
+            for attempt in $(seq 1 30); do
+              if [ "$(docker inspect --format '{{.State.Health.Status}}' "$fe_id")" = healthy ]; then
+                return 0
+              fi
+              sleep 2
+            done
+            docker compose logs --tail 50 fe >&2
+            return 1
+          }
+          previous=$(sed -n 's/^FE_IMAGE=//p' .env 2>/dev/null || true)
+          # Retire the pre-compose containers and their public port 3000.
+          docker rm -f careerbridge-fe careerbridge-fe-previous 2>/dev/null || true
+          if ! start_fe "$IMAGE"; then
+            echo 'Frontend failed its health check.' >&2
+            if [ -n "$previous" ] && [ "$previous" != "$IMAGE" ]; then
+              echo "Restoring $previous." >&2
+              start_fe "$previous" || true
             fi
-            sleep 2
-          done
-          if [ "$healthy" != true ]; then
-            echo 'Frontend failed its health check; restoring previous container.' >&2
-            false
+            exit 1
           fi
-          trap - ERR
-          docker rm -f "$previous" 2>/dev/null || true
           REMOTE
           } | sshpass -e ssh \
             -o StrictHostKeyChecking=accept-new \

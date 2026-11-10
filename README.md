@@ -45,7 +45,7 @@ Admin UI browser acceptance uses synthetic API interception: `CHROME_BIN=/path/t
 
 ## Docker deployment to VPS
 
-`.github/workflows/publish-vps.yml` runs on `main` and manual dispatch. Its two jobs
+`.github/workflows/publish-vps.yml` runs on `main`/`master` and manual dispatch. Its two jobs
 validate and publish an image to GHCR, then deploy that exact image digest over SSH.
 The Dockerfile has two stages: Node 24 builds `dist`, then unprivileged Nginx serves
 only that output. Existing local `dist` and `.env` files are excluded from the build.
@@ -61,29 +61,33 @@ Set these **frontend repository Actions secrets**:
 
 SSH uses `StrictHostKeyChecking=accept-new`, matching the backend workflow.
 `GITHUB_TOKEN` is supplied automatically. Allow the workflow to publish/read its
-GHCR package. The VPS needs Docker Engine with `host-gateway` support and Bash.
-The backend must run on the same VPS, publishing port 8080 as in its workflow.
-Nginx forwards `/api/` to that port with buffering disabled for SSE and preserves
-the request path, cookies, and Origin.
+GHCR package.
 
-Point your VPS HTTPS reverse proxy to `http://127.0.0.1:3000`. It must overwrite
-`X-Forwarded-Proto` with the original scheme, preserve Host, disable response
-buffering for `/api/`, allow long-lived SSE connections and CV uploads, and forward
-all paths (including `/app/`). Configure backend `AUTH_ORIGINS` and `CORS_ORIGINS`
-for the public HTTPS frontend origin and keep `AUTH_COOKIE_SECURE=true`.
-Port 3000 binds only to loopback; terminate TLS at that reverse proxy.
+Frontend, backend and Caddy run as one Docker Compose project on the VPS. The
+backend repository owns it (`deploy/compose.yaml`, `deploy/Caddyfile`) and its
+"Publish to VPS" workflow creates `~/careerbridge` on the VPS, so **deploy the
+backend first** and use the same `VPS_USERNAME` in both repositories. This
+workflow only sets `FE_IMAGE` in `~/careerbridge/.env` and restarts the `fe` service.
 
-The deployment waits for container health and restores the previous container if
-startup fails. Replacing the single container causes a brief interruption. The
+Caddy terminates HTTPS for the backend `APP_DOMAIN` secret and forwards every path
+to this container. Nginx serves the pages and forwards `/api/` to the `be` service
+over the compose network, with buffering disabled for SSE, preserving the request
+path, cookies, and Origin. Only Caddy publishes ports (80/443); nothing else on the
+VPS may listen there. Configure backend `AUTH_ORIGINS` and `CORS_ORIGINS` for
+`https://<APP_DOMAIN>` and keep `AUTH_COOKIE_SECURE=true`.
+
+The deployment waits for container health and switches back to the previous image
+if startup fails. Replacing the container causes a brief interruption. The
 health check covers static serving; backend availability is monitored separately.
 Nginx serves `/app/*` through `app/index.html`, caches hashed `/assets/*` for one
 year, revalidates HTML, and returns 404 for missing static files.
 
-Local Docker check (requires the backend on host port 8080):
+Local Docker check of the static pages only (`/api/` does not work outside the
+compose network, where the `be` service lives):
 
 ```bash
 docker build --target runtime -t careerbridge-fe .
-docker run --rm --add-host host.docker.internal:host-gateway -p 3000:8080 careerbridge-fe
+docker run --rm -p 3000:8080 careerbridge-fe
 curl -f http://localhost:3000/healthz
 curl -f http://localhost:3000/app/pekerjaan
 ```
