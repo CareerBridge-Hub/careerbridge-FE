@@ -345,6 +345,23 @@ function ReviewCard({
 }) {
   const [saving, setSaving] = useState(false)
   const update = (patch: Partial<Review>) => setReview({ ...review, ...patch })
+  const addPersonalSkill = (raw: string) => {
+    const name = raw.trim().replace(/\s+/g, ' ')
+    if (!name || [...name].length > 80 || /\p{Cc}/u.test(raw.trim())) {
+      toast.error('Nama skill pribadi harus berisi 1–80 karakter tanpa karakter kontrol.')
+      return
+    }
+    const exists = review.customSkills.some((item) => normalizeKey(item) === normalizeKey(name))
+    const retainedManual = manual.filter((item) => !review.skills.has(item.skillId)).length
+    if (!exists && review.skills.size + retainedManual + review.customSkills.length >= 100) {
+      toast.error('Maksimal 100 skill. Hapus skill lain sebelum menambahkan.')
+      return
+    }
+    update({
+      customSkills: exists ? review.customSkills : [...review.customSkills, name],
+      unknown: review.unknown.filter((item) => item !== raw),
+    })
+  }
   const toggle = (id: string, raw?: string) => {
     const next = new Map(review.skills)
     if (next.has(id)) next.delete(id)
@@ -404,15 +421,16 @@ function ReviewCard({
                   </SkillBadge>
                 )
               })}
-              {review.customSkills.map((name)=><SkillBadge key={normalizeKey(name)} tone="owned" action={<RemoveButton label={name} onClick={()=>update({customSkills:review.customSkills.filter((item)=>normalizeKey(item)!==normalizeKey(name))})} />}>{name}<span className="font-normal opacity-70">(lainnya)</span></SkillBadge>)}
+              {review.customSkills.map((name)=><SkillBadge key={normalizeKey(name)} tone="owned" action={<RemoveButton label={name} onClick={()=>update({customSkills:review.customSkills.filter((item)=>normalizeKey(item)!==normalizeKey(name))})} />}>{name}<span className="font-normal opacity-70">(pribadi)</span></SkillBadge>)}
               <SkillBrowser selected={new Set(review.skills.keys())} onToggle={(id)=>toggle(id)} customSkills={review.customSkills} onCustomSkillsChange={(customSkills)=>update({customSkills})} />
             </div>
+            {review.customSkills.length > 0 && <p className="mt-2 text-xs text-muted-foreground">Skill pribadi disimpan di akunmu setelah menekan Simpan. Skill ini belum dihitung dalam skor kecocokan; cocokkan ke katalog agar ikut dihitung.</p>}
           </section>
 
           {review.unknown.length > 0 && (
             <section className="rounded-xl border border-dashed bg-warn-soft/50 p-3.5">
-              <h3 className="text-sm font-medium">Tidak ada di kamus skill</h3>
-              <p className="mt-0.5 text-[13px] text-muted-foreground">Cocokkan ke skill yang ada, atau abaikan. Yang diabaikan tidak disimpan.</p>
+              <h3 className="text-sm font-medium">Belum cocok dengan katalog skill</h3>
+              <p className="mt-0.5 text-[13px] text-muted-foreground">Cocokkan ke katalog, tambahkan sebagai skill pribadi, atau abaikan jika hasil bacaan salah. Skill pribadi belum dihitung dalam skor kecocokan.</p>
               <ul className="mt-3 grid gap-2">
                 {review.unknown.map((raw) => (
                   <li key={raw} className="flex flex-wrap items-center gap-2 text-sm">
@@ -431,6 +449,9 @@ function ReviewCard({
                         Cocokkan
                       </Button>
                     </SkillPicker>
+                    <Button size="sm" variant="outline" className="bg-card" disabled={saving} aria-label={`Tambah skill pribadi: ${raw}`} onClick={() => addPersonalSkill(raw)}>
+                      <Plus /> Tambah pribadi
+                    </Button>
                     <Button size="sm" variant="ghost" onClick={() => update({ unknown: review.unknown.filter((u) => u !== raw) })}>
                       Abaikan
                     </Button>
@@ -618,8 +639,8 @@ function SkillBrowser({ selected, onToggle, customSkills, onCustomSkillsChange }
             </section>
           ))}
           <section className="mb-4 rounded-xl border border-dashed p-3">
-            <h3 className="text-sm font-medium">Skill lain</h3>
-            <p className="mt-1 text-xs text-muted-foreground">Tambahkan skill yang belum ada di daftar. Bisa lebih dari satu; skill lain tersimpan di browser ini.</p>
+            <h3 className="text-sm font-medium">Skill pribadi</h3>
+            <p className="mt-1 text-xs text-muted-foreground">Tambahkan skill yang belum ada di katalog. Setelah menekan Simpan, skill tersimpan di akunmu. Skill pribadi belum dihitung dalam skor kecocokan.</p>
             <div className="mt-2 flex flex-wrap gap-1.5">
               {customSkills.map((name)=><SkillBadge key={normalizeKey(name)} tone="owned" action={<RemoveButton label={name} onClick={()=>onCustomSkillsChange(customSkills.filter((item)=>normalizeKey(item)!==normalizeKey(name)))} />}>{name}<span className="font-normal opacity-70">(lainnya)</span></SkillBadge>)}
             </div>

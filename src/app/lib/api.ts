@@ -38,7 +38,7 @@ async function api<T>(path: string, init: RequestInit = {}): Promise<T> {
 }
 export type TrainingEvidence = {method: 'mapped' | 'text' | 'semantic' | 'catalog'; confirmedSkillIds: string[]; relatedSkillIds: string[]; similarity: number | null; source: string | null; sourceUrl: string | null; importedAt: string | null}
 export type TrainingRetrieval = {mode: 'catalog' | 'text' | 'hybrid'; catalogCount: number; indexedCount: number; notice: string | null; sampleDataIncluded: boolean}
-export type PageResult<T> = {evidence?: Record<string, TrainingEvidence>; retrieval?: TrainingRetrieval;items: T[]; total: number; offset: number; limit: number; skills?: Skill[]; institutions?: Institution[]; fields?: string[]; occupationOptions?: {id:string;nama:string}[]}
+export type PageResult<T> = {evidence?: Record<string, TrainingEvidence>; retrieval?: TrainingRetrieval;items: T[]; total: number; offset: number; limit: number; skills?: Skill[]; institutions?: Institution[]; fields?: string[]; occupationOptions?: {id:string;nama:string}[]; sourceOptions?: {key:string;name:string}[]}
 export type BrowseParams = Record<string, string | number | boolean | undefined>
 export function queryString(query: BrowseParams): string {
   const params = new URLSearchParams()

@@ -35,6 +35,7 @@ export default function Lowongan() {
   const change=(key:string,value:string)=>setParams((p)=>{if(value)p.set(key,value);else p.delete(key);p.delete('offset');return p})
   const shown=result.data?.items ?? []
   const occupations=result.data?.occupationOptions ?? []
+  const sourceOptions=result.data?.sourceOptions ?? SOURCES.map(([key,name])=>({key,name}))
   const skillNames=new Map((result.data?.skills ?? []).map((s)=>[s.id,s.nama]))
 
   return <>
@@ -51,7 +52,7 @@ export default function Lowongan() {
         <SelectTrigger className="bg-card" aria-label="Filter sumber"><SelectValue placeholder="Semua sumber" /></SelectTrigger>
         <SelectContent>
           <SelectItem value="__all">Semua sumber</SelectItem>
-          {SOURCES.map(([key,label])=><SelectItem key={key} value={key}>{label}</SelectItem>)}
+          {sourceOptions.map(({key,name})=><SelectItem key={key} value={key}>{name}</SelectItem>)}
         </SelectContent>
       </Select>
       <Select value={occupation || '__all'} onValueChange={(value)=>change('occupation',value==='__all'?'':value)}>
