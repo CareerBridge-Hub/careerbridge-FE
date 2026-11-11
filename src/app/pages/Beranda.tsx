@@ -1,7 +1,7 @@
 import { Link } from 'react-router'
 import { Bar, BarChart, Cell, LabelList, XAxis, YAxis } from 'recharts'
 import { ArrowRight, BadgeCheck, BriefcaseBusiness, FileText, GraduationCap, Target, TriangleAlert } from 'lucide-react'
-import { PostingItem } from '@/app/components/cards'
+import { DashboardVacancies } from '@/app/components/DashboardVacancies'
 import { DashboardSkeleton, EmptyState, PageHeader, Score, ScoreBar, SkillBadge, Stat } from '@/app/components/common'
 import { Button } from '@/app/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/app/components/ui/card'
@@ -13,7 +13,7 @@ const chartConfig = { score: { label: 'Skor', color: 'var(--chart-1)' } } satisf
 const toneFill = (s: number) => (s >= 70 ? 'var(--chart-1)' : s >= 40 ? 'var(--chart-5)' : 'var(--chart-4)')
 
 export default function Beranda() {
-  const { user, ranked, target, focus, skillsById, postings } = useCareer()
+  const { user, ranked, target, focus, skillsById } = useCareer()
   const dashboard = useDashboard()
   const freeForFocus = useFreeTrainingCount()
   const firstName = user.nama.split(' ')[0]
@@ -57,7 +57,6 @@ export default function Beranda() {
 
   const best = ranked[0]
   const chartData = ranked.slice(0, 6).map((m) => ({ id: m.job.id, nama: m.job.nama, score: m.score }))
-  const focusPostings = postings.filter((p) => p.jobRoleId === focus?.job.id).slice(0, 3)
 
   return (
     <>
@@ -156,25 +155,7 @@ export default function Beranda() {
         </Card>
       </div>
 
-      {focus && (
-        <section className="mt-8">
-          <div className="mb-3 flex items-end justify-between gap-3">
-            <h2 className="font-display text-lg">Lowongan terbaru · {focus.job.nama}</h2>
-            <Button asChild variant="link" className="h-auto shrink-0 px-0">
-              <Link to={`/lowongan?job=${focus.job.id}`}>Lihat semua</Link>
-            </Button>
-          </div>
-          {focusPostings.length > 0 ? (
-            <div className="grid gap-2.5">
-              {focusPostings.map((p) => (
-                <PostingItem key={p.id} posting={p} />
-              ))}
-            </div>
-          ) : (
-            <p className="rounded-xl border border-dashed bg-card p-6 text-center text-sm text-muted-foreground">Belum ada lowongan untuk pekerjaan ini.</p>
-          )}
-        </section>
-      )}
+      {focus && <DashboardVacancies occupationId={focus.job.id} occupationName={focus.job.nama} />}
     </>
   )
 }
