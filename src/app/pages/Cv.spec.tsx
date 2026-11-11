@@ -1,9 +1,9 @@
 import {beforeEach,afterEach,it,expect,vi} from 'vitest'
-import {render,screen,waitFor,cleanup} from '@testing-library/react'
+import {render,screen,waitFor,cleanup,fireEvent} from '@testing-library/react'
 import {BrowserRouter} from 'react-router'
 import Cv from './Cv'
 const mocks=vi.hoisted(()=>({latest:vi.fn(),watch:vi.fn(),queue:vi.fn(),save:vi.fn(),skills:vi.fn(),signals:[] as AbortSignal[]}))
-vi.mock('@/app/lib/api',()=>({ApiError:class extends Error{},CV_STEPS:['Mengunggah file','Mengambil teks dari PDF','AI mengekstrak','Menyamakan skill'],deleteCv:vi.fn(),queueCv:mocks.queue,watchCv:mocks.watch,latestCv:mocks.latest,dismissCv:vi.fn(),fetchSkillsByIds:mocks.skills,saveSkills:mocks.save,validateCv:vi.fn(),cvResult:(job:{id:string;parsed:object})=>({...job.parsed,cvId:job.id,matched:[],unknown:[]})}))
+vi.mock('@/app/lib/api',()=>({ApiError:class extends Error{},CV_STEPS:['Mengunggah file','Mengambil teks dari PDF','AI mengekstrak','Menyamakan skill'],deleteCv:vi.fn(),queueCv:mocks.queue,watchCv:mocks.watch,latestCv:mocks.latest,dismissCv:vi.fn(),fetchSkillsByIds:mocks.skills,saveSkills:mocks.save,validateCv:vi.fn(),cvResult:(job:{id:string;parsed:object})=>({matched:[],unknown:[],...job.parsed,cvId:job.id})}))
 vi.mock('@/app/lib/hooks',()=>({useServerPage:()=>({data:{items:[],total:0},loading:false,error:'',retry:vi.fn()}),useCareer:()=>({user:{id:'user-a',skills:[],cv:null},db:{skills:[]},skillsById:new Map()})}))
 vi.mock('@/app/components/SkillPicker',()=>({SkillPicker:()=>null}))
 beforeEach(()=>{vi.clearAllMocks();mocks.signals.length=0;mocks.skills.mockResolvedValue(undefined)})
@@ -26,4 +26,28 @@ it('reconnects to an existing upload and restores its finished review after leav
  expect(mocks.queue).not.toHaveBeenCalled()
  expect(mocks.save).not.toHaveBeenCalled()
  expect(screen.getByText(/restored.pdf dibaca/)).toBeTruthy()
+})
+
+const finished=(occupation:object)=>({id:'cv-ai',fileName:'cloud.pdf',size:123,durationMs:1000,step:4,status:'selesai',reviewed:false,error:null,normalized:{matched:[],unknown:[]},
+ parsed:{pendidikan:[],pengalaman:[{posisi:'Cloud Engineer',tempat:'',periode:'2022'}],skills:['AWS'],matched:[{skillId:'skill-aws',sumber:'cv_alias',raw:'AWS'}],occupation}})
+it('shows the AI occupation suggestion and lets the user decline saving it',async()=>{
+ mocks.latest.mockResolvedValueOnce(finished({kind:'custom',nama:'Cloud Engineer',bidang:'Teknologi Informasi',deskripsi:'Mengelola infrastruktur cloud.',baseOccupationId:null,wajib:['skill-aws'],opsional:[],evidence:['Cloud Engineer','AWS']}))
+ mocks.save.mockResolvedValue(undefined)
+ render(<BrowserRouter><Cv/></BrowserRouter>)
+ await screen.findByText('Saran pekerjaan dari AI')
+ expect(screen.getByText('Cloud Engineer',{selector:'p'})).toBeTruthy()
+ expect(screen.getByText(/Berdasarkan: “Cloud Engineer”, “AWS”/)).toBeTruthy()
+ const box=screen.getByRole('checkbox',{name:/Simpan sebagai pekerjaan pribadimu/})
+ expect(box.getAttribute('data-state')).toBe('checked')
+ fireEvent.click(box)
+ fireEvent.click(screen.getByRole('button',{name:/Simpan 1 skill/}))
+ await waitFor(()=>expect(mocks.save).toHaveBeenCalledTimes(1))
+ expect(mocks.save.mock.calls[0][3]).toBe(false)
+})
+it('labels a catalog match without offering to create a personal occupation',async()=>{
+ mocks.latest.mockResolvedValueOnce(finished({kind:'catalog',occupationId:'job-web',nama:'Web Developer',evidence:['Cloud Engineer']}))
+ render(<BrowserRouter><Cv/></BrowserRouter>)
+ await screen.findByText('Web Developer')
+ expect(screen.getByText('Sudah ada di daftar pekerjaan.')).toBeTruthy()
+ expect(screen.queryByRole('checkbox')).toBeNull()
 })

@@ -10,11 +10,19 @@ export type JobSkill = { skillId: string; tipe: SkillType }
 export type JobRole = {
   id: string
   nama: string
-  kodeKbji: string
+  /** Null only for the user's own occupation inferred from their CV. */
+  kodeKbji: string | null
   bidang: string
   deskripsi: string
   skills: JobSkill[]
+  /** True when inferred from the user's CV; only that user can see it. */
+  custom?: boolean
 }
+
+/** AI occupation suggestion for one processed CV, validated by the server. */
+export type OccupationSuggestion =
+  | { kind: 'catalog'; occupationId: string; nama: string; evidence: string[] }
+  | { kind: 'custom'; nama: string; bidang: string; deskripsi: string; baseOccupationId: string | null; wajib: string[]; opsional: string[]; evidence: string[] }
 
 export type InstitutionType = 'LPK' | 'BLK' | 'Platform'
 

@@ -1,5 +1,5 @@
 import { useSyncExternalStore } from 'react'
-import type { CvUpload, Db, Experience, Institution, JobRole, Skill, Training, User, UserSkill } from './types.ts'
+import type { CvUpload, Db, Experience, Institution, JobRole, OccupationSuggestion, Skill, Training, User, UserSkill } from './types.ts'
 import type { JobMatch, RankedTraining } from './matching.ts'
 import { ApiError, request, watchJob, type UploadStatus } from './http.ts'
 export { ApiError } from './http.ts'
@@ -152,7 +152,7 @@ export async function changePassword(currentPassword: string, password: string) 
   await api('/auth/password', {method: 'POST', body: JSON.stringify({currentPassword, password})})
   ++generation; inFlight = null; current = null; db = empty(); ranked = []; clearAdminCatalog(); status = { loading: false, error: '' }; emit()
 }
-export type ParsedCv = { pendidikan: string[]; pengalaman: Experience[]; skills: string[]; cvId?: string; matched?: {skillId: string; sumber: UserSkill['sumber']; raw: string}[]; unknown?: string[] }
+export type ParsedCv = { pendidikan: string[]; pengalaman: Experience[]; skills: string[]; cvId?: string; matched?: {skillId: string; sumber: UserSkill['sumber']; raw: string}[]; unknown?: string[]; occupation?: OccupationSuggestion | null }
 export async function validateCv(file: File): Promise<string | null> {
   if (file.size > MAX_CV_BYTES) return 'Ukuran file maksimal 2 MB.'
   if (file.size === 0) return 'File kosong.'
@@ -182,14 +182,16 @@ export async function watchCv(id:string,onStep:(step:number)=>void,signal?:Abort
 export function cvResult(job:CvJob):ParsedCv {
   if(!job.parsed)throw new ApiError('Hasil CV belum tersedia.')
   reviewCvId=job.id
-  return {...job.parsed,cvId:job.id,matched:(job.normalized?.matched ?? []) as ParsedCv['matched'],unknown:job.normalized?.unknown ?? []}
+  return {...job.parsed,cvId:job.id,matched:(job.normalized?.matched ?? []) as ParsedCv['matched'],unknown:job.normalized?.unknown ?? [],occupation:job.normalized?.occupation ?? null}
 }
 export async function parseCv(file:File,onStep:(step:number)=>void,signal?:AbortSignal):Promise<ParsedCv>{
   onStep(0);const uploaded=await queueCv(file)
   return cvResult(await watchCv(uploaded.id,onStep,signal))
 }
-export async function saveSkills(skills: UserSkill[], cv?: CvUpload, customSkills: string[] = []) {
-  await api('/me/skills', { method: 'PUT', body: JSON.stringify({ skills, customSkills, cvId: cv?.id ?? (cv ? reviewCvId : undefined) }) }); await refresh()
+/** `acceptOccupation` only matters with a CV: false skips saving the CV's AI occupation. */
+export async function saveSkills(skills: UserSkill[], cv?: CvUpload, customSkills: string[] = [], acceptOccupation = true) {
+  const cvId = cv?.id ?? (cv ? reviewCvId : undefined)
+  await api('/me/skills', { method: 'PUT', body: JSON.stringify({ skills, customSkills, cvId, ...(cvId ? { acceptOccupation } : {}) }) }); await refresh()
 }
 export async function deleteCv() { await api('/me/cv', { method: 'DELETE' }); await refresh() }
 export async function setTarget(occupationId: string | null) { await api('/me/target', { method: 'PUT', body: JSON.stringify({ occupationId }) }); await refresh() }

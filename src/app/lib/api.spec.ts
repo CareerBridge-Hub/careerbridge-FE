@@ -31,7 +31,7 @@ it('persists skill corrections and target changes through the API', async () => 
   await api.saveSkills([{ skillId: 'skill-a', sumber: 'cv_semantik' }], { id: 'cv-a', fileName: 'cv.pdf', size: 10, uploadedAt: '', pendidikan: [], pengalaman: [] })
   await api.setTarget('occupation-a')
   const calls = vi.mocked(fetch).mock.calls
-  expect(calls.find(([url]) => String(url).endsWith('/me/skills'))?.[1]?.body).toBe(JSON.stringify({ skills: [{ skillId: 'skill-a', sumber: 'cv_semantik' }], customSkills: [], cvId: 'cv-a' }))
+  expect(calls.find(([url]) => String(url).endsWith('/me/skills'))?.[1]?.body).toBe(JSON.stringify({ skills: [{ skillId: 'skill-a', sumber: 'cv_semantik' }], customSkills: [], cvId: 'cv-a', acceptOccupation: true }))
   expect(calls.find(([url]) => String(url).endsWith('/me/target'))?.[1]?.body).toBe(JSON.stringify({ occupationId: 'occupation-a' }))
 })
 

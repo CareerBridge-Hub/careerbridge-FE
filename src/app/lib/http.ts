@@ -1,3 +1,4 @@
+import type { OccupationSuggestion } from './types.ts'
 export class ApiError extends Error {
   readonly code: string
   readonly status: number
@@ -16,7 +17,7 @@ export async function request<T>(base: string, path: string, init: RequestInit =
   if (!response.ok) throw new ApiError(data?.error?.message ?? 'Permintaan gagal. Coba lagi.', data?.error?.code, response.status)
   return data as T
 }
-export type UploadStatus<T> = { id: string; status: 'proses' | 'selesai' | 'gagal'; step: number; error: string | null; parsed: T; normalized: { matched: { skillId: string; sumber: string; raw: string }[]; unknown: string[] } }
+export type UploadStatus<T> = { id: string; status: 'proses' | 'selesai' | 'gagal'; step: number; error: string | null; parsed: T; normalized: { matched: { skillId: string; sumber: string; raw: string }[]; unknown: string[]; occupation?: OccupationSuggestion | null } }
 export async function pollUpload<T>(read: () => Promise<UploadStatus<T>>, onStep: (n: number) => void, delay = 1500): Promise<UploadStatus<T>> {
   const until = Date.now() + 240_000
   while (Date.now() < until) {

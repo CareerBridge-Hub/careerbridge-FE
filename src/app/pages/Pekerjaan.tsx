@@ -85,7 +85,7 @@ export default function Pekerjaan() {
                   <Badge variant="secondary" className="min-w-0 shrink text-[11px] whitespace-normal">
                     {m.job.bidang}
                   </Badge>
-                  <span className="shrink-0 text-xs whitespace-nowrap text-muted-foreground">KBJI {m.job.kodeKbji}</span>
+                  <span className="shrink-0 text-xs whitespace-nowrap text-muted-foreground">{m.job.custom ? 'Dari CV kamu' : `KBJI ${m.job.kodeKbji}`}</span>
                 </div>
                 <h2 className="mt-3 font-semibold">
                   <Link to={`/pekerjaan/${m.job.id}`} className="after:absolute after:inset-0 after:rounded-xl focus-visible:outline-none after:focus-visible:ring-[3px] after:focus-visible:ring-ring/50">

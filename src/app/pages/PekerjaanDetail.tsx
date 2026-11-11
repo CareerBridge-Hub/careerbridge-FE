@@ -69,7 +69,9 @@ export default function PekerjaanDetail() {
         <div>
           <div className="flex flex-wrap items-center gap-2">
             <Badge variant="secondary">{m.job.bidang}</Badge>
-            <span className="text-xs text-muted-foreground">KBJI {m.job.kodeKbji}</span>
+            <span className="text-xs text-muted-foreground">
+              {m.job.custom ? 'Pekerjaan pribadimu, disimpulkan AI dari CV. Syarat skill-nya perkiraan, bukan standar resmi.' : `KBJI ${m.job.kodeKbji}`}
+            </span>
           </div>
           <h1 className="mt-2 font-display text-[28px] tracking-tight">{m.job.nama}</h1>
           <p className="mt-1 max-w-2xl text-sm text-muted-foreground">{m.job.deskripsi}</p>

@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState, useRef, type DragEvent } from 'react'
 import { Link, useNavigate } from 'react-router'
 import { toast } from 'sonner'
-import { ArrowRight, Check, FileText, Loader2, Plus, RefreshCw, Sparkles, Trash2, Upload, X } from 'lucide-react'
+import { ArrowRight, Briefcase, Check, FileText, Loader2, Plus, RefreshCw, Sparkles, Trash2, Upload, X } from 'lucide-react'
 import { ChipsSkeleton, EmptyState, LoadingNote, PageHeader, SkillBadge } from '@/app/components/common'
 import { SkillPicker } from '@/app/components/SkillPicker'
 import {
@@ -18,6 +18,7 @@ import {
 import { Button } from '@/app/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/app/components/ui/card'
 import { Skeleton } from '@/app/components/ui/skeleton'
+import { Checkbox } from '@/app/components/ui/checkbox'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/app/components/ui/dialog'
 import { ApiError, CV_STEPS, fetchSkillsByIds, deleteCv, queueCv, watchCv, latestCv, dismissCv, cvResult, type CvJob, saveSkills, validateCv, type ParsedCv } from '@/app/lib/api'
 import { fetchCatalog, type BrowseParams } from '@/app/lib/api'
@@ -39,6 +40,8 @@ type Review = {
   skills: Map<string, string>
   unknown: string[]
   customSkills: string[]
+  /** Save the AI occupation suggestion together with the skills. */
+  acceptOccupation: boolean
 }
 
 export default function Cv() {
@@ -60,7 +63,7 @@ export default function Cv() {
     await fetchSkillsByIds((parsed.matched ?? []).map((m)=>m.skillId),signal)
     if(signal.aborted)return
     setReview({file:file ?? {name:job.fileName,size:job.size},parsed,seconds:(job.durationMs ?? 0)/1000,
-      skills:new Map((parsed.matched ?? []).map((m)=>[m.skillId,m.raw])),unknown:parsed.unknown ?? [],customSkills:user.customSkills ?? []})
+      skills:new Map((parsed.matched ?? []).map((m)=>[m.skillId,m.raw])),unknown:parsed.unknown ?? [],customSkills:user.customSkills ?? [],acceptOccupation:true})
   }
   useEffect(()=>{
     const controller=new AbortController();connection.current=controller
@@ -363,7 +366,7 @@ function ReviewCard({
         uploadedAt: new Date().toISOString(),
         pendidikan: review.parsed.pendidikan,
         pengalaman: review.parsed.pengalaman,
-      }, review.customSkills)
+      }, review.customSkills, review.acceptOccupation)
       onDone()
     } catch (err) {
       toast.error(err instanceof ApiError ? err.message : 'Gagal menyimpan. Coba lagi.')
@@ -440,6 +443,14 @@ function ReviewCard({
             </section>
           )}
 
+          {review.parsed.occupation && (
+            <OccupationSuggestionCard
+              suggestion={review.parsed.occupation}
+              accepted={review.acceptOccupation}
+              onAcceptedChange={(acceptOccupation) => update({ acceptOccupation })}
+            />
+          )}
+
           <div className="flex flex-wrap gap-2 border-t pt-5">
             <Button size="lg" onClick={save} disabled={saving || (review.skills.size === 0 && review.customSkills.length === 0)}>
               {saving && <Loader2 className="animate-spin" />}
@@ -452,6 +463,43 @@ function ReviewCard({
         </div>
       </CardContent>
     </Card>
+  )
+}
+
+function OccupationSuggestionCard({
+  suggestion,
+  accepted,
+  onAcceptedChange,
+}: {
+  suggestion: NonNullable<ParsedCv['occupation']>
+  accepted: boolean
+  onAcceptedChange: (accepted: boolean) => void
+}) {
+  const custom = suggestion.kind === 'custom'
+  return (
+    <section className="rounded-xl border bg-mint-soft/40 p-3.5" aria-labelledby="occupation-suggestion">
+      <h3 id="occupation-suggestion" className="flex items-center gap-1.5 text-sm font-medium">
+        <Briefcase className="size-4 text-mint-ink" /> Saran pekerjaan dari AI
+      </h3>
+      <p className="mt-1.5 font-display text-lg">{suggestion.nama}</p>
+      {custom && <p className="mt-0.5 text-[13px] text-muted-foreground">{suggestion.deskripsi}</p>}
+      {suggestion.evidence.length > 0 && (
+        <p className="mt-2 text-[13px] text-muted-foreground">
+          Berdasarkan: {suggestion.evidence.map((e) => `“${e}”`).join(', ')}
+        </p>
+      )}
+      {custom ? (
+        <label htmlFor="accept-occupation" className="mt-3 flex cursor-pointer gap-2.5 text-[13px] leading-relaxed">
+          <Checkbox id="accept-occupation" checked={accepted} onCheckedChange={(v) => onAcceptedChange(v === true)} className="mt-0.5" />
+          <span>
+            Belum ada di daftar pekerjaan. Simpan sebagai pekerjaan pribadimu (hanya kamu yang bisa melihat) untuk skor kecocokan,
+            rekomendasi pelatihan, dan lowongan. Syarat skill-nya perkiraan AI, bukan standar resmi.
+          </span>
+        </label>
+      ) : (
+        <p className="mt-2 text-[13px] text-muted-foreground">Sudah ada di daftar pekerjaan.</p>
+      )}
+    </section>
   )
 }
 
