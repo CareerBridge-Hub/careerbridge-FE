@@ -1,0 +1,74 @@
+name: Frontend security
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+  # Daily: new advisories appear without any code change.
+  schedule:
+    - cron: '41 2 * * *'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+env:
+  # Same release and checksum as the backend repository; bump both together.
+  TRIVY_VERSION: 0.76.1
+  TRIVY_SHA256: c7cbe3137fb8a48a17574bede3dd6beb16742d1e9772929940fc90082c39d9c0
+  IMAGE: careerbridge-fe:security-scan
+jobs:
+  repository:
+    name: Trivy npm lockfile, Dockerfile and committed secret scan
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
+      - name: Install checksum-pinned Trivy
+        run: |
+          mkdir -p "$RUNNER_TEMP/trivy-bin"
+          curl --proto '=https' --proto-redir '=https' --tlsv1.2 --fail --silent --show-error --location --retry 3 --connect-timeout 20 --max-time 180 \
+            "https://github.com/aquasecurity/trivy/releases/download/v${TRIVY_VERSION}/trivy_${TRIVY_VERSION}_Linux-64bit.tar.gz" \
+            --output "$RUNNER_TEMP/trivy.tar.gz"
+          printf '%s  %s\n' "$TRIVY_SHA256" "$RUNNER_TEMP/trivy.tar.gz" | sha256sum --check --strict -
+          tar -xzf "$RUNNER_TEMP/trivy.tar.gz" -C "$RUNNER_TEMP/trivy-bin" trivy
+          echo "$RUNNER_TEMP/trivy-bin" >> "$GITHUB_PATH"
+      - name: Scan dependencies and Dockerfile (HIGH/CRITICAL findings fail CI)
+        run: trivy fs --config trivy.yaml --skip-version-check .
+      # --config '' stops trivy.yaml's HIGH/CRITICAL filter from hiding MEDIUM secrets (JWTs, webhooks).
+      - name: Scan committed files for secrets (any severity fails CI)
+        if: ${{ !cancelled() }}
+        run: trivy fs --config '' --scanners secret --skip-dirs .git,node_modules --exit-code 1 --skip-version-check .
+
+  image:
+    name: Trivy scan of the production image
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
+      - name: Install checksum-pinned Trivy
+        run: |
+          mkdir -p "$RUNNER_TEMP/trivy-bin"
+          curl --proto '=https' --proto-redir '=https' --tlsv1.2 --fail --silent --show-error --location --retry 3 --connect-timeout 20 --max-time 180 \
+            "https://github.com/aquasecurity/trivy/releases/download/v${TRIVY_VERSION}/trivy_${TRIVY_VERSION}_Linux-64bit.tar.gz" \
+            --output "$RUNNER_TEMP/trivy.tar.gz"
+          printf '%s  %s\n' "$TRIVY_SHA256" "$RUNNER_TEMP/trivy.tar.gz" | sha256sum --check --strict -
+          tar -xzf "$RUNNER_TEMP/trivy.tar.gz" -C "$RUNNER_TEMP/trivy-bin" trivy
+          echo "$RUNNER_TEMP/trivy-bin" >> "$GITHUB_PATH"
+      # Same target and build argument as publish-vps.yml, but never pushed anywhere.
+      - name: Build runtime image locally
+        run: docker build --target runtime --build-arg VITE_API_URL=/api/v1 --tag "$IMAGE" .
+      - name: Scan image OS packages (fixable HIGH/CRITICAL fail CI)
+        # Unfixed base-image advisories cannot be acted on here; they surface again once a fix ships.
+        run: trivy image --config '' --image-src docker --scanners vuln --severity HIGH,CRITICAL --ignore-unfixed --exit-code 1 --timeout 10m --skip-version-check "$IMAGE"
+      - name: Scan the built bundle for embedded secrets
+        # Anything in VITE_* or imported config ends up public in these files.
+        run: |
+          container=$(docker create "$IMAGE")
+          docker cp "$container:/srv/careerbridge" "$RUNNER_TEMP/bundle"
+          docker rm "$container"
+          trivy fs --config '' --scanners secret --exit-code 1 --skip-version-check "$RUNNER_TEMP/bundle"

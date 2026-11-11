@@ -1,0 +1,16 @@
+# Repository scan: npm lockfile (including dev/build tooling) and Dockerfile, HIGH/CRITICAL only.
+# Secrets are scanned in a separate step at every severity: a leaked JWT or webhook is rated MEDIUM.
+# Used by .github/workflows/security.yml; run locally with `trivy fs --config trivy.yaml .`
+timeout: 10m
+exit-code: 1
+severity:
+  - HIGH
+  - CRITICAL
+scan:
+  scanners:
+    - vuln
+    - misconfig
+  skip-dirs:
+    - .git
+    # Installed packages are scanned through package-lock.json instead.
+    - node_modules
