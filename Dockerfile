@@ -25,6 +25,10 @@ RUN set -eu; \
     done
 
 FROM nginxinc/nginx-unprivileged:stable-alpine AS runtime
+# The upstream tag lags Alpine security fixes (e.g. brotli-libs CVE-2026-111497);
+# pull patched OS packages at build time. Drops back to 101:101 below.
+USER root
+RUN apk upgrade --no-cache
 COPY docker/nginx.conf /etc/nginx/conf.d/default.conf
 COPY --from=build --chown=101:101 /build/dist/ /srv/careerbridge/
 RUN test -s /srv/careerbridge/index.html \
