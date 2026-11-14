@@ -1,15 +1,16 @@
 import { useState } from 'react'
 import { toast } from 'sonner'
-import { ExternalLink, RefreshCw } from 'lucide-react'
+import { ExternalLink, RefreshCw, Search } from 'lucide-react'
 import { Pager, SearchBox } from '@/app/components/admin'
 import { useSearchPaged } from '@/app/lib/table'
 import { EmptyState, PageHeader } from '@/app/components/common'
 import { Badge } from '@/app/components/ui/badge'
+import { Button } from '@/app/components/ui/button'
 import { Card } from '@/app/components/ui/card'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/app/components/ui/select'
 import { Switch } from '@/app/components/ui/switch'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/app/components/ui/table'
-import { setPostingHidden, useDb, useAdminSources, loadAdminCatalog } from '@/app/lib/api'
+import { setPostingHidden, useDb, useAdminSources, loadAdminCatalog, scrapeNow } from '@/app/lib/api'
 import { formatDate } from '@/app/lib/format'
 
 const ALL = '__semua'
@@ -20,6 +21,19 @@ export default function AdminLowongan() {
   const [now] = useState(()=>Date.now())
   const [pending,setPending] = useState<string | null>(null)
   const [refreshing,setRefreshing] = useState(false)
+  const [scraping,setScraping] = useState(false)
+  const runScrape = async () => {
+    setScraping(true)
+    try {
+      const r = await scrapeNow()
+      const top = r.priorities.slice(0, 5).map((p) => `${p.occupation} (${p.demand} pengguna)`).join(', ')
+      const description = top ? `Diprioritaskan: ${top}` : 'Belum ada pekerjaan target pengguna; semua keyword dicari bergiliran.'
+      if (!r.sources.length) toast.info('Semua sumber sedang berjalan atau baru saja diperbarui (jeda 10 menit).', { description })
+      else if (!r.schedulerActive) toast.warning(`${r.sources.length} sumber dijadwalkan, tetapi importer di server ini nonaktif.`, { description: 'Aktifkan JOB_SCRAPE_ENABLED=true atau jalankan job-import --daemon.' })
+      else toast.success(`${r.sources.length} sumber mulai dicari satu per satu.`, { description })
+    } catch (error) { toast.error(error instanceof Error ? error.message : 'Gagal menjalankan pencarian.') }
+    finally { setScraping(false) }
+  }
   const [job, setJob] = useState(ALL)
   const [status, setStatus] = useState<'semua' | 'tampil' | 'sembunyi'>('semua')
   const jobs = new Map(db.jobs.map((j) => [j.id, j]))
@@ -34,6 +48,11 @@ export default function AdminLowongan() {
       <PageHeader
         title="Lowongan"
         description="Hasil tarikan otomatis dari halaman karier perusahaan. Sembunyikan lowongan yang tidak relevan supaya tidak tampil ke pengguna. Lowongan yang ditutup sumber atau kedaluwarsa tetap tidak ditampilkan."
+        actions={
+          <Button onClick={runScrape} disabled={scraping}>
+            <Search className="size-4" /> {scraping ? 'Menjadwalkan...' : 'Cari lowongan sekarang'}
+          </Button>
+        }
       />
       <p className="-mt-3 mb-5 flex items-center gap-1.5 text-xs text-muted-foreground">
         <RefreshCw className="size-3.5" /> Diperbarui tiap 6 jam · {db.postings.length} lowongan, {hiddenCount} disembunyikan

@@ -132,7 +132,12 @@ export async function register(input: RegisterInput): Promise<User | null> {
   inFlight = null; await refresh(); return current
 }
 export async function login(email: string, password: string): Promise<User> {
-  await api('/auth/login', {method: 'POST', body: JSON.stringify({email: email.trim().toLowerCase(), password})})
+  try { await api('/auth/login', {method: 'POST', body: JSON.stringify({email: email.trim().toLowerCase(), password})}) }
+  catch (e) {
+    // BE maps every rejected credential (wrong password, unconfirmed email) to 401 with a generic session message.
+    if (e instanceof ApiError && e.status === 401) throw new ApiError('Email atau password salah, atau email belum diverifikasi.', e.code, 401)
+    throw e
+  }
   inFlight = null; await refresh()
   if (!current) throw new ApiError('Profil gagal dimuat. Coba lagi.')
   return current
@@ -246,6 +251,13 @@ export const deleteTraining = (id:string)=>adminDelete('trainings',id)
 export async function setPostingHidden(id:string,hidden:boolean) {
   await api(`/admin/vacancies/${encodeURIComponent(id)}/visibility`,{method:'PATCH',body:JSON.stringify({hidden})})
   db={...db,postings:db.postings.map((p)=>p.id===id?{...p,hidden}:p)}; emit()
+}
+export type ScrapeResult = {sources:string[]; priorities:{occupation:string; keyword:string; demand:number}[]; schedulerActive:boolean}
+// Queues every vacancy source now; keyword sources search the occupations users want first.
+export async function scrapeNow():Promise<ScrapeResult> {
+  const result=await api<ScrapeResult>('/admin/vacancies/scrape',{method:'POST'})
+  await loadAdminCatalog(true)
+  return result
 }
 export async function importRows(kind:'skills'|'jobs'|'institutions'|'trainings',rows:unknown[]) {
   if (!rows.length || rows.length>500) throw new ApiError('Import dibatasi 1–500 baris per file.')

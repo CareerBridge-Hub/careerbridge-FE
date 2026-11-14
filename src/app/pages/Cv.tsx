@@ -420,11 +420,11 @@ function ReviewCard({
                     action={<RemoveButton label={nama} onClick={() => toggle(id)} />}
                   >
                     {nama}
-                    {renamed && <span className="font-normal opacity-70">dari “{raw}”</span>}
+                    {renamed && <>{' '}<span className="font-normal opacity-70">dari “{raw}”</span></>}
                   </SkillBadge>
                 )
               })}
-              {review.customSkills.map((name)=><SkillBadge key={normalizeKey(name)} tone="owned" action={<RemoveButton label={name} onClick={()=>update({customSkills:review.customSkills.filter((item)=>normalizeKey(item)!==normalizeKey(name))})} />}>{name}<span className="font-normal opacity-70">(pribadi)</span></SkillBadge>)}
+              {review.customSkills.map((name)=><SkillBadge key={normalizeKey(name)} tone="owned" action={<RemoveButton label={name} onClick={()=>update({customSkills:review.customSkills.filter((item)=>normalizeKey(item)!==normalizeKey(name))})} />}>{name}{' '}<span className="font-normal opacity-70">(pribadi)</span></SkillBadge>)}
               <SkillBrowser selected={new Set(review.skills.keys())} onToggle={(id)=>toggle(id)} customSkills={review.customSkills} onCustomSkillsChange={(customSkills)=>update({customSkills})} />
             </div>
             {review.customSkills.length > 0 && <p className="mt-2 text-xs text-muted-foreground">Skill pribadi disimpan di akunmu setelah menekan Simpan. Skill ini belum dihitung dalam skor kecocokan; cocokkan ke katalog agar ikut dihitung.</p>}
@@ -590,7 +590,7 @@ function SkillEditor({
                   {s.nama}
                 </SkillBadge>
               ))}
-            {customDraft.map((name)=><SkillBadge key={normalizeKey(name)} tone="owned" action={<RemoveButton label={name} onClick={()=>setCustomDraft(customDraft.filter((item)=>normalizeKey(item)!==normalizeKey(name)))} />}>{name}<span className="font-normal opacity-70">(lainnya)</span></SkillBadge>)}
+            {customDraft.map((name)=><SkillBadge key={normalizeKey(name)} tone="owned" action={<RemoveButton label={name} onClick={()=>setCustomDraft(customDraft.filter((item)=>normalizeKey(item)!==normalizeKey(name)))} />}>{name}{' '}<span className="font-normal opacity-70">(lainnya)</span></SkillBadge>)}
           </div>
         )}
 
@@ -690,7 +690,7 @@ function SkillBrowser({ selected, onToggle, customSkills, onCustomSkillsChange }
             <h3 className="text-sm font-medium">Skill pribadi</h3>
             <p className="mt-1 text-xs text-muted-foreground">Tambahkan skill yang belum ada di katalog. Setelah menekan Simpan, skill tersimpan di akunmu. Skill pribadi belum dihitung dalam skor kecocokan.</p>
             <div className="mt-2 flex flex-wrap gap-1.5">
-              {customSkills.map((name)=><SkillBadge key={normalizeKey(name)} tone="owned" action={<RemoveButton label={name} onClick={()=>onCustomSkillsChange(customSkills.filter((item)=>normalizeKey(item)!==normalizeKey(name)))} />}>{name}<span className="font-normal opacity-70">(lainnya)</span></SkillBadge>)}
+              {customSkills.map((name)=><SkillBadge key={normalizeKey(name)} tone="owned" action={<RemoveButton label={name} onClick={()=>onCustomSkillsChange(customSkills.filter((item)=>normalizeKey(item)!==normalizeKey(name)))} />}>{name}{' '}<span className="font-normal opacity-70">(lainnya)</span></SkillBadge>)}
             </div>
             <form className="mt-3 flex gap-2" onSubmit={(event)=>{event.preventDefault();addOtherSkill()}}>
               <input aria-label="Nama skill lain" value={otherSkill} maxLength={80} onChange={(event)=>setOtherSkill(event.target.value)} placeholder="Tulis nama skill…" className="h-9 min-w-0 flex-1 rounded-md border bg-background px-3 text-sm" />

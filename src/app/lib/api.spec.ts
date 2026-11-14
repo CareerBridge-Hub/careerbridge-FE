@@ -21,6 +21,13 @@ it('logs in through the backend and fetches only the current profile', async () 
   expect(urls.some((url) => url.includes('/users'))).toBe(false)
   expect(localStorage.getItem('careerbridge:db:v1')).toBeNull()
 })
+it('shows a credentials message, not a session message, when login is rejected', async () => {
+  vi.mocked(fetch).mockImplementation(async (url) => String(url).endsWith('/auth/login')
+    ? Response.json({error: {code: 'unauthorized', message: 'Sesi berakhir. Silakan masuk lagi.'}}, {status: 401})
+    : Response.json({error: {code: 'unauthorized', message: 'x'}}, {status: 401}))
+  const api = await import('./api')
+  await expect(api.login('rina@example.test', 'wrong')).rejects.toThrow('Email atau password salah, atau email belum diverifikasi.')
+})
 it('supports confirmation-required registration without a fake session', async () => {
   const api = await import('./api')
   const result = await api.register({ nama: 'Rina', email: 'rina@example.test', password: 'private-password', pendidikan: 'S1', jurusan: 'TI', provinsi: 'Banten', kota: 'Serang', consent: true })

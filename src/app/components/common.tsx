@@ -246,14 +246,15 @@ export function SkillBadge({
   return (
     <span
       className={cn(
-        'inline-flex h-7 items-center gap-1 rounded-full border px-3 text-[13px] font-medium whitespace-nowrap',
+        // Long names (e.g. AI "dari “…”" source text) wrap inside the chip instead of overflowing the card.
+        'inline-flex min-h-7 max-w-full items-center gap-1 rounded-[14px] border px-3 py-0.5 text-[13px] leading-snug font-medium',
         toneClass[tone],
         action && 'pr-1',
         className,
       )}
     >
-      {tone === 'owned' && <Check className="size-3.5" aria-hidden="true" />}
-      {children}
+      {tone === 'owned' && <Check className="size-3.5 shrink-0" aria-hidden="true" />}
+      <span className="min-w-0 break-words">{children}</span>
       {action}
     </span>
   )

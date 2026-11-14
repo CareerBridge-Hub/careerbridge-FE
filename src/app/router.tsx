@@ -10,6 +10,7 @@ import Masuk from './pages/Masuk'
 const Beranda = lazy(() => import('./pages/Beranda'))
 const Cv = lazy(() => import('./pages/Cv'))
 const Pekerjaan = lazy(() => import('./pages/Pekerjaan'))
+const PetaKarir = lazy(() => import('./pages/PetaKarir'))
 const PekerjaanDetail = lazy(() => import('./pages/PekerjaanDetail'))
 const Pelatihan = lazy(() => import('./pages/Pelatihan'))
 const Lowongan = lazy(() => import('./pages/Lowongan'))
@@ -67,6 +68,7 @@ export function AppRoutes() {
       <Route element={<RequireAuth shell><AppLayout /></RequireAuth>}>
         <Route index element={<RequireAuth role="user">{page(<Beranda />)}</RequireAuth>} />
         <Route path="cv" element={<RequireAuth role="user">{page(<Cv />)}</RequireAuth>} />
+        <Route path="peta-karir" element={<RequireAuth role="user">{page(<PetaKarir />)}</RequireAuth>} />
         <Route path="pekerjaan" element={<RequireAuth role="user">{page(<Pekerjaan />)}</RequireAuth>} />
         <Route path="pekerjaan/:id" element={<RequireAuth role="user">{page(<PekerjaanDetail />)}</RequireAuth>} />
         <Route path="pelatihan" element={<RequireAuth role="user">{page(<Pelatihan />)}</RequireAuth>} />

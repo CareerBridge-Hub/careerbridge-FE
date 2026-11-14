@@ -56,7 +56,7 @@ export function TrainingCard({
 
       <div className="mt-3 flex flex-wrap gap-1.5">
         {skills.map((id) => (
-          <SkillBadge key={id} tone={wajibGap.has(id) ? 'wajib' : opsionalGap.has(id) ? 'opsional' : 'neutral'} className="h-6 px-2.5 text-xs">
+          <SkillBadge key={id} tone={wajibGap.has(id) ? 'wajib' : opsionalGap.has(id) ? 'opsional' : 'neutral'} className="min-h-6 px-2.5 text-xs">
             {skillsById.get(id)?.nama ?? id}
           </SkillBadge>
         ))}
