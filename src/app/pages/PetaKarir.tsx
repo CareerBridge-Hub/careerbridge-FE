@@ -89,7 +89,7 @@ export default function PetaKarir() {
       <div className="mt-6 grid items-start gap-6 lg:grid-cols-[minmax(0,1.1fr)_minmax(0,1fr)]">
         <div className="lg:sticky lg:top-4">
           <ul className="flex flex-wrap gap-x-5 gap-y-1 text-[13px] text-muted-foreground">
-            <li><b className="font-medium text-foreground">Jarak ke tengah</b>: seberapa siap kamu</li>
+            <li><b className="font-medium text-foreground">Jarak ke tengah</b>: jumlah skill wajib yang belum kamu punya, bukan persentase cocok</li>
             <li><b className="font-medium text-foreground">Titik di garis</b>: skill wajib yang masih kurang</li>
           </ul>
           <Orbit matches={matches} selected={selected} targetId={user.targetJobId} onSelect={setPicked} />
@@ -289,6 +289,7 @@ function Detail({ m, isTarget }: { m: JobMatch; isTarget: boolean }) {
           <p className="mt-1.5 flex flex-wrap items-center gap-2 text-[13px] text-muted-foreground">
             <span className="inline-flex items-center gap-1.5 rounded-full bg-secondary px-2.5 py-0.5 font-medium text-foreground">
               <RingDot ring={ring} /> {RINGS[ring].label}
+              <span className="font-normal text-muted-foreground">· {m.missingWajib.length ? `${m.missingWajib.length} skill wajib lagi` : 'skill wajib lengkap'}</span>
             </span>
             {m.job.bidang}
           </p>
