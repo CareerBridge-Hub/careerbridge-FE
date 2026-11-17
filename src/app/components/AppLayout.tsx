@@ -8,7 +8,6 @@ import {
   GraduationCap,
   LayoutDashboard,
   LogOut,
-  Orbit,
   UserRound,
   Tags,
   School,
@@ -51,7 +50,6 @@ type NavItem = { to: string; label: string; icon: LucideIcon; end?: boolean }
 const USER_NAV: NavItem[] = [
   { to: '/', label: 'Beranda', icon: LayoutDashboard, end: true },
   { to: '/cv', label: 'CV & Skill', icon: FileText },
-  { to: '/peta-karir', label: 'Peta karir', icon: Orbit },
   { to: '/pekerjaan', label: 'Pekerjaan', icon: BriefcaseBusiness },
   { to: '/pelatihan', label: 'Pelatihan', icon: GraduationCap },
   { to: '/lowongan', label: 'Lowongan', icon: BriefcaseBusiness },

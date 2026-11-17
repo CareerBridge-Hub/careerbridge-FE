@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { BrowserRouter } from 'react-router'
-import PetaKarir from './PetaKarir'
+import { CareerMap } from './CareerMap'
 
 const mocks = vi.hoisted(() => ({ page: vi.fn(), analysis: vi.fn(), career: vi.fn() }))
 vi.mock('@/app/lib/api', () => ({ setTarget: vi.fn(), fetchMatchesPage: vi.fn(), fetchVacanciesPage: vi.fn() }))
@@ -36,12 +36,14 @@ beforeEach(() => {
 })
 afterEach(cleanup)
 
-it('maps every match, opens the nearest job and shows its AI-ordered route', () => {
-  render(<BrowserRouter><PetaKarir /></BrowserRouter>)
-  expect(screen.getAllByRole('button', { pressed: false }).some((b) => b.getAttribute('aria-label')?.startsWith('Asisten Apoteker, Kesehatan, 92% cocok, Siap sekarang'))).toBe(true)
-  expect(screen.getByRole('heading', { level: 2, name: 'Analis Laboratorium Medis' })).toBeTruthy()
-  expect(screen.getByText('· 1 skill wajib lagi')).toBeTruthy()
-  expect(screen.getByText(/jumlah skill wajib yang belum kamu punya/)).toBeTruthy()
+it('maps every match, opens the highest percentage first and shows the AI-ordered route', () => {
+  render(<BrowserRouter><CareerMap /></BrowserRouter>)
+  expect(screen.getByRole('heading', { level: 2, name: 'Peta karir' })).toBeTruthy()
+  expect(screen.getByRole('button', { name: 'Asisten Apoteker, Kesehatan, 92% cocok', pressed: true })).toBeTruthy()
+  expect(screen.getByRole('heading', { level: 3, name: 'Asisten Apoteker' })).toBeTruthy()
+  expect(screen.getByText(/persentase cocok, makin dekat makin cocok/)).toBeTruthy()
+  fireEvent.click(screen.getAllByRole('button', { name: /^Analis Laboratorium Medis/ })[0])
+  expect(screen.getByText('1 skill wajib lagi')).toBeTruthy()
   expect(screen.getByText('Paragraf alasan.')).toBeTruthy()
   expect(screen.getByText('QC Laboratorium Klinik')).toBeTruthy()
   expect(screen.getByText('BLK Depok, daring, Gratis, 2 minggu')).toBeTruthy()
@@ -51,15 +53,14 @@ it('maps every match, opens the nearest job and shows its AI-ordered route', () 
 })
 
 it('switches the detail when another job is picked', () => {
-  render(<BrowserRouter><PetaKarir /></BrowserRouter>)
+  render(<BrowserRouter><CareerMap /></BrowserRouter>)
   fireEvent.click(screen.getAllByRole('button', { name: /^Staf Quality Control/ })[0])
-  expect(screen.getByRole('heading', { level: 2, name: 'Staf Quality Control' })).toBeTruthy()
+  expect(screen.getByRole('heading', { level: 3, name: 'Staf Quality Control' })).toBeTruthy()
   expect(mocks.analysis).toHaveBeenLastCalledWith('qc')
 })
 
-it('asks for skills before drawing a map', () => {
+it('draws nothing until the profile has skills (the skill editor above asks for them)', () => {
   mocks.career.mockReturnValue({ user: { skills: [], targetJobId: null }, skillsById: new Map(), instById: new Map() })
-  render(<BrowserRouter><PetaKarir /></BrowserRouter>)
-  expect(screen.getByText('Peta karir butuh skill-mu dulu')).toBeTruthy()
-  expect(screen.getByRole('link', { name: 'Upload CV' }).getAttribute('href')).toBe('/cv')
+  const { container } = render(<BrowserRouter><CareerMap /></BrowserRouter>)
+  expect(container.innerHTML).toBe('')
 })

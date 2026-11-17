@@ -6,6 +6,7 @@ const mocks=vi.hoisted(()=>({latest:vi.fn(),watch:vi.fn(),queue:vi.fn(),save:vi.
 vi.mock('@/app/lib/api',()=>({ApiError:class extends Error{},CV_STEPS:['Mengunggah file','Mengambil teks dari PDF','AI mengekstrak','Menyamakan skill'],deleteCv:vi.fn(),queueCv:mocks.queue,watchCv:mocks.watch,latestCv:mocks.latest,dismissCv:vi.fn(),fetchSkillsByIds:mocks.skills,saveSkills:mocks.save,validateCv:vi.fn(),cvResult:(job:{id:string;parsed:object;normalized:object})=>({matched:[],unknown:[],...job.parsed,...job.normalized,cvId:job.id})}))
 vi.mock('@/app/lib/hooks',()=>({useServerPage:()=>({data:{items:[],total:0},loading:false,error:'',retry:vi.fn()}),useCareer:()=>({user:{id:'user-a',skills:[],customSkills:mocks.customSkills,cv:null},db:{skills:[]},skillsById:new Map()})}))
 vi.mock('@/app/components/SkillPicker',()=>({SkillPicker:()=>null}))
+vi.mock('@/app/components/CareerMap',()=>({CareerMap:()=>null}))
 beforeEach(()=>{vi.clearAllMocks();mocks.signals.length=0;mocks.customSkills=[];mocks.skills.mockResolvedValue(undefined)})
 afterEach(cleanup)
 it('reconnects to an existing upload and restores its finished review after leaving and returning',async()=>{

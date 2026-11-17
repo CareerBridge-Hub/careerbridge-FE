@@ -7,17 +7,14 @@ import { Button } from '@/app/components/ui/button'
 import { Skeleton } from '@/app/components/ui/skeleton'
 import { fetchMatchesPage, fetchVacanciesPage, type Analysis } from '@/app/lib/api'
 import {
-  BAND,
-  RINGS,
+  bestMatch,
   defaultSelection,
   insights,
   layoutOrbit,
   planCost,
   planSteps,
   projectedScore,
-  ringOf,
   type OrbitNode,
-  type Ring,
 } from '@/app/lib/careerMap'
 import { rupiah } from '@/app/lib/format'
 import { useAnalysis, useCareer, useServerPage } from '@/app/lib/hooks'
@@ -28,7 +25,8 @@ import { cn } from '@/app/lib/utils'
 // The orbit stays readable up to about ten labels; the rest live on the Pekerjaan page.
 const TOP = { limit: 10 }
 
-export default function PetaKarir() {
+/** Career map section on the CV & Skill page: distance from "Kamu" = match percentage. */
+export function CareerMap() {
   const { user, skillsById } = useCareer()
   const top = useServerPage(fetchMatchesPage, TOP, user.skills.length > 0)
   const items = (top.data?.items ?? []).filter((m) => m.score > 0)
@@ -39,73 +37,62 @@ export default function PetaKarir() {
   const [picked, setPicked] = useState<string | null>(null)
   const selectedId = picked && matches.some((m) => m.job.id === picked) ? picked : defaultSelection(matches, user.targetJobId)
 
-  const header = (
-    <div className="mb-6">
-      <h1 className="font-display text-2xl tracking-tight sm:text-[28px]">Peta karir</h1>
-      <p className="mt-1.5 max-w-2xl text-sm text-muted-foreground">
-        Pekerjaan yang bisa kamu tuju dari {user.skills.length} skill-mu sekarang, dan jalan ke sana.
+  // The skill editor above already asks for skills, so an empty profile shows no map.
+  if (user.skills.length === 0) return null
+
+  let body
+  if (top.loading) body = <MapSkeleton />
+  else if (top.error)
+    body = (
+      <p role="alert" className="rounded-xl border border-dashed bg-card p-6 text-sm">
+        {top.error} <button className="underline" onClick={top.retry}>Coba lagi</button>
       </p>
-    </div>
-  )
-
-  if (user.skills.length === 0)
-    return (
+    )
+  else if (matches.length === 0)
+    body = (
+      <EmptyState title="Belum ada pekerjaan yang nyambung">
+        Skill-mu belum dipakai di pekerjaan mana pun di katalog. Tambah skill lain supaya peta terisi.
+      </EmptyState>
+    )
+  else {
+    const selected = matches.find((m) => m.job.id === selectedId) ?? matches[0]
+    body = (
       <>
-        {header}
-        <EmptyState
-          title="Peta karir butuh skill-mu dulu"
-          action={<Button asChild><Link to="/cv">Upload CV</Link></Button>}
-        >
-          Upload CV atau pilih skill sendiri. Setelah itu peta menunjukkan pekerjaan yang bisa kamu tuju.
-        </EmptyState>
+        <Summary matches={matches} skillsById={skillsById} />
+        <div className="mt-6 grid items-start gap-6 lg:grid-cols-[minmax(0,1.1fr)_minmax(0,1fr)]">
+          <div className="lg:sticky lg:top-4">
+            <ul className="flex flex-wrap gap-x-5 gap-y-1 text-[13px] text-muted-foreground">
+              <li><b className="font-medium text-foreground">Jarak ke tengah</b>: persentase cocok, makin dekat makin cocok</li>
+              <li><b className="font-medium text-foreground">Titik di garis</b>: skill wajib yang masih kurang</li>
+            </ul>
+            <Orbit matches={matches} selected={selected} targetId={user.targetJobId} onSelect={setPicked} />
+            <p className="mt-4 text-center text-[13px] text-muted-foreground">
+              Menampilkan {matches.length} pekerjaan paling cocok.{' '}
+              <Link to="/pekerjaan" className="font-medium text-foreground underline underline-offset-2">Lihat semua pekerjaan</Link>
+            </p>
+          </div>
+          <Detail key={selected.job.id} m={selected} isTarget={user.targetJobId === selected.job.id} />
+        </div>
       </>
     )
-  if (top.loading) return <>{header}<MapSkeleton /></>
-  if (top.error)
-    return (
-      <>
-        {header}
-        <p role="alert" className="rounded-xl border border-dashed bg-card p-6 text-sm">
-          {top.error} <button className="underline" onClick={top.retry}>Coba lagi</button>
-        </p>
-      </>
-    )
-  if (matches.length === 0)
-    return (
-      <>
-        {header}
-        <EmptyState title="Belum ada pekerjaan yang nyambung" action={<Button asChild variant="outline"><Link to="/cv">Tambah skill</Link></Button>}>
-          Skill-mu belum dipakai di pekerjaan mana pun di katalog. Tambah skill lain supaya peta terisi.
-        </EmptyState>
-      </>
-    )
-
-  const selected = matches.find((m) => m.job.id === selectedId) ?? matches[0]
+  }
 
   return (
-    <>
-      {header}
-      <Summary matches={matches} skillsById={skillsById} />
-      <div className="mt-6 grid items-start gap-6 lg:grid-cols-[minmax(0,1.1fr)_minmax(0,1fr)]">
-        <div className="lg:sticky lg:top-4">
-          <ul className="flex flex-wrap gap-x-5 gap-y-1 text-[13px] text-muted-foreground">
-            <li><b className="font-medium text-foreground">Jarak ke tengah</b>: jumlah skill wajib yang belum kamu punya, bukan persentase cocok</li>
-            <li><b className="font-medium text-foreground">Titik di garis</b>: skill wajib yang masih kurang</li>
-          </ul>
-          <Orbit matches={matches} selected={selected} targetId={user.targetJobId} onSelect={setPicked} />
-          <p className="mt-4 text-center text-[13px] text-muted-foreground">
-            Menampilkan {matches.length} pekerjaan paling cocok.{' '}
-            <Link to="/pekerjaan" className="font-medium text-foreground underline underline-offset-2">Lihat semua pekerjaan</Link>
-          </p>
-        </div>
-        <Detail key={selected.job.id} m={selected} isTarget={user.targetJobId === selected.job.id} />
+    <section id="peta-karir" aria-labelledby="peta-karir-title" className="mt-10 scroll-mt-4">
+      <div className="mb-4">
+        <h2 id="peta-karir-title" className="font-display text-xl tracking-tight sm:text-2xl">Peta karir</h2>
+        <p className="mt-1 max-w-2xl text-sm text-muted-foreground">
+          Pekerjaan yang bisa kamu tuju dari {user.skills.length} skill-mu sekarang, dan jalan ke sana.
+        </p>
       </div>
-    </>
+      {body}
+    </section>
   )
 }
 
 function Summary({ matches, skillsById }: { matches: JobMatch[]; skillsById: Map<string, Skill> }) {
-  const { counts, strongest, sharedGap } = insights(matches)
+  const { ready, strongest, sharedGap } = insights(matches)
+  const best = bestMatch(matches)
   const name = (id: string) => skillsById.get(id)?.nama ?? 'Skill'
   const gapJobs = sharedGap
     ? sharedGap.jobNames.length === 2
@@ -115,21 +102,18 @@ function Summary({ matches, skillsById }: { matches: JobMatch[]; skillsById: Map
   return (
     <div className="grid gap-3 sm:grid-cols-[repeat(auto-fit,minmax(0,1fr))]">
       <section className="rounded-xl bg-card p-4">
-        <h2 className="text-[13px] text-muted-foreground">Tujuan yang terbuka</h2>
+        <h3 className="text-[13px] text-muted-foreground">Tujuan yang terbuka</h3>
         <p className="mt-1 font-display text-2xl tabular-nums">
           {matches.length} <span className="font-sans text-sm font-normal text-muted-foreground">pekerjaan</span>
         </p>
         <ul className="mt-1.5 grid gap-0.5 text-[13px]">
-          {(Object.keys(RINGS) as Ring[]).map((r) => (
-            <li key={r} className="flex items-center gap-2 tabular-nums">
-              <RingDot ring={r} /> {counts[r]} {RINGS[r].label.toLowerCase()}
-            </li>
-          ))}
+          {best && <li>Paling cocok: <b className="font-medium">{best.job.nama}</b> <span className="tabular-nums">({best.score}%)</span></li>}
+          <li className="text-muted-foreground tabular-nums">{ready} sudah lengkap skill wajibnya</li>
         </ul>
       </section>
       {strongest && (
         <section className="rounded-xl bg-card p-4">
-          <h2 className="text-[13px] text-muted-foreground">Skill terkuatmu</h2>
+          <h3 className="text-[13px] text-muted-foreground">Skill terkuatmu</h3>
           <p className="mt-1 font-display text-lg leading-snug">{name(strongest.skillId)}</p>
           <p className="mt-1 text-[13px] text-muted-foreground">
             Dipakai di {strongest.jobs} dari {matches.length} tujuan di peta.
@@ -138,7 +122,7 @@ function Summary({ matches, skillsById }: { matches: JobMatch[]; skillsById: Map
       )}
       {sharedGap && (
         <section className="rounded-xl bg-mint-soft p-4">
-          <h2 className="text-[13px] text-mint-ink">Satu skill, beberapa pintu</h2>
+          <h3 className="text-[13px] text-mint-ink">Satu skill, beberapa pintu</h3>
           <p className="mt-1 font-display text-lg leading-snug">{name(sharedGap.skillId)}</p>
           <p className="mt-1 text-[13px] text-[#14523a]">
             Skill wajib yang masih kurang di {gapJobs}. Kuasai sekali, {sharedGap.jobNames.length} tujuan makin dekat.
@@ -147,10 +131,6 @@ function Summary({ matches, skillsById }: { matches: JobMatch[]; skillsById: Map
       )}
     </div>
   )
-}
-
-function RingDot({ ring }: { ring: Ring }) {
-  return <span aria-hidden className="inline-block size-2.5 shrink-0 rounded-full border-[2.5px] bg-card" style={{ borderColor: RINGS[ring].color }} />
 }
 
 /** Below this orbit width names do not fit; nodes show the score only and a list carries the names. */
@@ -180,9 +160,14 @@ function Orbit({ matches, selected, targetId, onSelect }: { matches: JobMatch[];
     <>
       <div ref={ref} className="relative mx-auto my-5 aspect-square w-full max-w-[580px]">
         <svg viewBox="0 0 100 100" className="absolute inset-0 size-full" aria-hidden>
-          <circle cx="50" cy="50" r={BAND.jauh * 100} className="fill-none stroke-foreground/20" strokeDasharray="5 6" vectorEffect="non-scaling-stroke" strokeWidth="1.5" />
-          <circle cx="50" cy="50" r={BAND.dekat * 100} className="fill-none stroke-foreground/20" strokeDasharray="5 6" vectorEffect="non-scaling-stroke" strokeWidth="1.5" />
-          <circle cx="50" cy="50" r={BAND.siap * 100} className="fill-mint-soft/60 stroke-mint" vectorEffect="non-scaling-stroke" strokeWidth="1.5" />
+          {/* Guide rings drawn outside-in so the inner (highest score) fill sits on top. */}
+          {[...captions].reverse().map((c, i) =>
+            i === captions.length - 1 ? (
+              <circle key={c.score} cx="50" cy="50" r={c.r * 100} className="fill-mint-soft/60 stroke-mint" vectorEffect="non-scaling-stroke" strokeWidth="1.5" />
+            ) : (
+              <circle key={c.score} cx="50" cy="50" r={c.r * 100} className="fill-none stroke-foreground/20" strokeDasharray="5 6" vectorEffect="non-scaling-stroke" strokeWidth="1.5" />
+            ),
+          )}
           <line x1="50" y1="50" x2={sel.x} y2={sel.y} className="stroke-primary" strokeWidth="3" strokeLinecap="round" vectorEffect="non-scaling-stroke" />
           {Array.from({ length: stops }, (_, i) => {
             const t = 0.3 + 0.5 * ((i + 1) / (stops + 1))
@@ -192,16 +177,15 @@ function Orbit({ matches, selected, targetId, onSelect }: { matches: JobMatch[];
         <div className="absolute top-1/2 left-1/2 grid aspect-square w-[19%] -translate-1/2 place-content-center rounded-full bg-primary text-center text-white">
           <b className="font-display text-sm leading-tight sm:text-base">Kamu</b>
         </div>
-        {/* Zone captions sit on their ring line; the layout keeps every node clear of them. */}
+        {/* Percentage captions sit on their guide ring; the layout keeps every node clear of them. */}
         {captions.map((c) => (
           <span
-            key={c.ring}
+            key={c.score}
             aria-hidden
-            className="pointer-events-none absolute z-[5] flex h-[22px] w-max -translate-1/2 items-center gap-1.5 rounded-full border bg-card px-2.5 text-[11px] font-medium text-foreground shadow-sm"
+            className="pointer-events-none absolute z-[5] flex h-[22px] w-max -translate-1/2 items-center rounded-full border bg-card px-2.5 text-[11px] font-medium text-muted-foreground tabular-nums shadow-sm"
             style={{ left: `${c.x}%`, top: `${c.y}%` }}
           >
-            <RingDot ring={c.ring} />
-            {RINGS[c.ring].label}
+            {c.score}%
           </span>
         ))}
         {nodes.map((n) => {
@@ -213,17 +197,17 @@ function Orbit({ matches, selected, targetId, onSelect }: { matches: JobMatch[];
               type="button"
               onClick={() => onSelect(n.match.job.id)}
               aria-pressed={on}
-              aria-label={`${n.match.job.nama}, ${n.match.job.bidang}, ${n.match.score}% cocok, ${RINGS[n.ring].label}${target ? ', incaranmu' : ''}`}
+              aria-label={`${n.match.job.nama}, ${n.match.job.bidang}, ${n.match.score}% cocok${target ? ', incaranmu' : ''}`}
               title={`${n.match.job.nama} (${n.match.job.bidang})`}
               className={cn(
                 // w-max: near the right edge an absolute box would otherwise shrink and clip its text
                 'absolute z-10 flex w-max -translate-1/2 items-center gap-1.5 border-2 bg-card text-left shadow-sm transition-[scale,box-shadow] hover:z-30 hover:scale-105 focus-visible:ring-[3px] focus-visible:ring-ring focus-visible:outline-none motion-reduce:transition-none',
                 compact ? 'rounded-full p-0.5' : 'rounded-2xl py-1 pr-3 pl-1',
-                on && 'z-20 border-primary bg-primary text-white shadow-lg shadow-primary/25',
+                on ? 'z-20 border-primary bg-primary text-white shadow-lg shadow-primary/25' : 'border-foreground/25',
               )}
-              style={{ left: `${n.x}%`, top: `${n.y}%`, borderColor: on ? undefined : RINGS[n.ring].color }}
+              style={{ left: `${n.x}%`, top: `${n.y}%` }}
             >
-              <span className={cn('shrink-0 rounded-full px-1.5 text-[11px] leading-[18px] font-semibold tabular-nums', on ? 'bg-mint text-primary' : 'text-white')} style={on ? undefined : { background: RINGS[n.ring].color }}>
+              <span className={cn('shrink-0 rounded-full px-1.5 text-[11px] leading-[18px] font-semibold tabular-nums', on ? 'bg-mint text-primary' : 'bg-foreground/70 text-white')}>
                 {n.match.score}%
               </span>
               {!compact && (
@@ -239,12 +223,11 @@ function Orbit({ matches, selected, targetId, onSelect }: { matches: JobMatch[];
           )
         })}
       </div>
-      <ul className="flex flex-wrap justify-center gap-x-4 gap-y-1 text-[13px] text-muted-foreground">
-        {(Object.keys(RINGS) as Ring[]).map((r) => (
-          <li key={r} className="flex items-center gap-1.5"><RingDot ring={r} />{RINGS[r].label}</li>
-        ))}
-        {targetId && <li className="flex items-center gap-1.5"><Star aria-hidden className="size-3 fill-mint text-mint-ink" />Incaranmu</li>}
-      </ul>
+      {targetId && (
+        <p className="flex items-center justify-center gap-1.5 text-[13px] text-muted-foreground">
+          <Star aria-hidden className="size-3 fill-mint text-mint-ink" />Incaranmu
+        </p>
+      )}
       {compact && <MobileList nodes={nodes} selectedId={sel.match.job.id} onSelect={onSelect} />}
     </>
   )
@@ -262,7 +245,6 @@ function MobileList({ nodes, selectedId, onSelect }: { nodes: OrbitNode[]; selec
           onClick={() => onSelect(n.match.job.id)}
           className={cn('flex items-center gap-2.5 rounded-xl border bg-card px-3 py-2.5 text-left text-sm', n.match.job.id === selectedId && 'border-primary ring-1 ring-primary')}
         >
-          <RingDot ring={n.ring} />
           <span className="flex-1 font-medium">{n.match.job.nama}</span>
           <span className="text-muted-foreground tabular-nums">{n.match.score}%</span>
         </button>
@@ -273,7 +255,6 @@ function MobileList({ nodes, selectedId, onSelect }: { nodes: OrbitNode[]; selec
 
 function Detail({ m, isTarget }: { m: JobMatch; isTarget: boolean }) {
   const { skillsById, instById } = useCareer()
-  const ring = ringOf(m)
   const id = m.job.id
   const analysis = useAnalysis(id)
   const vacancies = useServerPage(fetchVacanciesPage, { occupation: id, limit: 2 })
@@ -285,11 +266,10 @@ function Detail({ m, isTarget }: { m: JobMatch; isTarget: boolean }) {
     <article className="rounded-2xl border bg-card p-5 sm:p-6" aria-live="polite">
       <header className="flex items-start gap-4">
         <div className="min-w-0 flex-1">
-          <h2 className="font-display text-xl leading-tight sm:text-[22px]">{m.job.nama}</h2>
+          <h3 className="font-display text-xl leading-tight sm:text-[22px]">{m.job.nama}</h3>
           <p className="mt-1.5 flex flex-wrap items-center gap-2 text-[13px] text-muted-foreground">
-            <span className="inline-flex items-center gap-1.5 rounded-full bg-secondary px-2.5 py-0.5 font-medium text-foreground">
-              <RingDot ring={ring} /> {RINGS[ring].label}
-              <span className="font-normal text-muted-foreground">· {m.missingWajib.length ? `${m.missingWajib.length} skill wajib lagi` : 'skill wajib lengkap'}</span>
+            <span className="rounded-full bg-secondary px-2.5 py-0.5 font-medium text-foreground">
+              {m.missingWajib.length ? `${m.missingWajib.length} skill wajib lagi` : 'Skill wajib lengkap'}
             </span>
             {m.job.bidang}
           </p>
@@ -305,10 +285,10 @@ function Detail({ m, isTarget }: { m: JobMatch; isTarget: boolean }) {
       <Why analysis={analysis} first={first} rest={rest} />
 
       <section className="mt-6">
-        <h3 className="flex items-baseline justify-between gap-2 text-sm font-medium">
+        <h4 className="flex items-baseline justify-between gap-2 text-sm font-medium">
           Skill yang sudah kamu bawa
           <span className="text-xs font-normal text-muted-foreground tabular-nums">{m.owned.length} dari {totalSkills}</span>
-        </h3>
+        </h4>
         <div className="mt-2 flex flex-wrap gap-1.5">
           {m.owned.map((s) => <SkillBadge key={s.skillId} tone="owned">{name(s.skillId)}</SkillBadge>)}
           {m.missingWajib.map((s) => <SkillBadge key={s.skillId} tone="wajib">{name(s.skillId)}</SkillBadge>)}
@@ -326,10 +306,10 @@ function Detail({ m, isTarget }: { m: JobMatch; isTarget: boolean }) {
       <RoutePlan m={m} analysis={analysis} instById={instById} name={name} vacancyTotal={vacancies.data?.total} />
 
       <section className="mt-6">
-        <h3 className="flex items-baseline justify-between gap-2 text-sm font-medium">
+        <h4 className="flex items-baseline justify-between gap-2 text-sm font-medium">
           Lowongan yang sedang buka
           {vacancies.data && <span className="text-xs font-normal text-muted-foreground tabular-nums">{vacancies.data.total} aktif</span>}
-        </h3>
+        </h4>
         {vacancies.loading ? (
           <div className="mt-2 grid gap-2" aria-hidden><Skeleton className="h-10 w-full" /><Skeleton className="h-10 w-full" /></div>
         ) : vacancies.error ? (
@@ -401,10 +381,10 @@ function RoutePlan({ m, analysis, instById, name, vacancyTotal }: { m: JobMatch;
 
   return (
     <section className="mt-6">
-      <h3 className="flex items-baseline justify-between gap-2 text-sm font-medium">
+      <h4 className="flex items-baseline justify-between gap-2 text-sm font-medium">
         {ready ? 'Kamu sudah bisa melamar' : 'Jalan ke sana'}
         {data && steps.length > 0 && <span className="text-xs font-normal text-muted-foreground">urutan disarankan AI</span>}
-      </h3>
+      </h4>
       {!ready && (
         <dl className="mt-2 grid grid-cols-3 gap-2 text-[13px]">
           <div className="rounded-xl bg-muted p-3"><dt className="text-xs text-muted-foreground">Skill wajib kurang</dt><dd className="mt-0.5 font-semibold tabular-nums">{m.missingWajib.length}</dd></div>

@@ -42,8 +42,8 @@ export default function Pekerjaan() {
         </div>
       )}
 
-      <div className="mb-5 flex flex-col gap-3 md:flex-row md:items-center">
-        <div className="relative md:w-72">
+      <div className="mb-6 space-y-3">
+        <div className="relative md:max-w-sm">
           <Search className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground" />
           <Input maxLength={120} value={q} onChange={(e) => setQ(e.target.value)} placeholder="Cari pekerjaan" className="h-10 bg-card pl-9" aria-label="Cari pekerjaan" />
         </div>
@@ -52,15 +52,18 @@ export default function Pekerjaan() {
           value={bidang}
           onValueChange={(v) => v && change('category',v)}
           variant="outline"
-          className="flex-wrap bg-card"
+          size="sm"
+          spacing={2}
+          className="w-full flex-wrap"
           aria-label="Filter bidang"
         >
-          <ToggleGroupItem value="semua" className="px-3">
-            Semua
-          </ToggleGroupItem>
-          {fields.map((f) => (
-            <ToggleGroupItem key={f} value={f} className="px-3">
-              {f}
+          {['semua', ...fields].map((f) => (
+            <ToggleGroupItem
+              key={f}
+              value={f}
+              className="rounded-full bg-card px-3.5 text-[13px] font-normal text-muted-foreground shadow-none hover:bg-muted hover:text-foreground data-[state=on]:border-primary data-[state=on]:bg-primary data-[state=on]:font-medium data-[state=on]:text-primary-foreground"
+            >
+              {f === 'semua' ? 'Semua' : f}
             </ToggleGroupItem>
           ))}
         </ToggleGroup>

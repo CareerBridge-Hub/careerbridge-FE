@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState, useRef, type DragEvent } from 'react'
 import { Link, useNavigate } from 'react-router'
 import { toast } from 'sonner'
 import { ArrowRight, Briefcase, Check, FileText, Loader2, Plus, RefreshCw, Sparkles, Trash2, Upload, X } from 'lucide-react'
+import { CareerMap } from '@/app/components/CareerMap'
 import { ChipsSkeleton, EmptyState, LoadingNote, PageHeader, SkillBadge } from '@/app/components/common'
 import { SkillPicker } from '@/app/components/SkillPicker'
 import {
@@ -182,6 +183,7 @@ export default function Cv() {
           <SkillEditor key={user.skills.map((s) => s.skillId).join()} initial={user.skills} initialCustom={user.customSkills ?? []} skillsById={skillsById} hasCv={!!user.cv} />
         </div>
       )}
+      {!checking && !processing && !review && <CareerMap />}
     </>
   )
 }
